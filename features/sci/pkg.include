@@ -1,6 +1,5 @@
-cloud-hypervisor-gl
-edk2-cloud-hypervisor-gl
-libvirt-daemon-driver-ch-gl
 multipath-tools
 open-iscsi
 openvswitch-switch
+wget
+xz-utils

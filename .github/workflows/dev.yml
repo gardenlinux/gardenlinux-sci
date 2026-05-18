@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - rel-2150-dev
     paths-ignore:
       - "**/README.md"
       - "docs/**"
@@ -33,16 +34,12 @@ jobs:
       - name: use VERSION file to support dev build on rel-branch
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "VERSION=today" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=$(cat VERSION)" >> $GITHUB_OUTPUT
-          fi
+          echo "VERSION=$(cat VERSION)" >> $GITHUB_OUTPUT
 
   build:
     needs: [set_version]
     if: ${{ github.event_name != 'pull_request' || github.event.action != 'closed' }}
-    uses: gardenlinux/gardenlinux/.github/workflows/build.yml@36078a576d0767433423289f2fa217b96cd951c9
+    uses: gardenlinux/gardenlinux/.github/workflows/build.yml@ddf3b2d84d972b6b6c7195d2ab726cdb84806e3a
     with:
       version: ${{ needs.set_version.outputs.VERSION }}
       # to set target to "release" or "nightly" we need proper KMS secrets

@@ -34,7 +34,7 @@ runs:
     - name: butane
       shell: bash
       run: |
-        BUTANE_VERSION="0.24.0"
+        BUTANE_VERSION="0.27.0"
         curl -LO "https://github.com/coreos/butane/releases/download/v${BUTANE_VERSION}/butane-x86_64-unknown-linux-gnu"
         chmod +x "butane-x86_64-unknown-linux-gnu"
         sudo mv "butane-x86_64-unknown-linux-gnu" /usr/local/bin/butane
