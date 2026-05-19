@@ -1,2 +1,4 @@
 frr
-
+libvirt-daemon-system
+libvirt-clients
+libvirt0
