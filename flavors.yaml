@@ -3,6 +3,14 @@ targets:
     category: baremetal
     flavors:
       - features:
+          - chost
+          - _pxe
+        arch: amd64
+        build: true
+        test: true
+        test-platform: false
+        publish: false
+      - features:
           - sci
           - _pxe
         arch: amd64
