@@ -1,1 +1,182 @@
-gardenlinux/build
+#!/usr/bin/env bash
+
+set -euo pipefail
+shopt -s nullglob
+
+exec 3>&1
+exec 1>&2
+
+#container_image=ghcr.io/gardenlinux/builder:98ee0d480844b2d041524841bfdbbb4007d32248
+container_image=localhost/builder
+container_engine=podman
+target_dir=.build
+
+container_run_opts=(
+	--memory 4G
+	--security-opt seccomp=unconfined
+	--security-opt apparmor=unconfined
+	--security-opt label=disable
+	--read-only
+)
+
+container_cmd=()
+
+use_kms=0
+resolve_cname=0
+allow_frankenstein=0
+apparmor_profile=
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--allow-frankenstein) # https://xkcd.com/1589/
+			allow_frankenstein=1
+			shift
+			;;
+		--container-image)
+			container_image="$2"
+			shift 2
+			;;
+		--container-engine)
+			container_engine="$2"
+			shift 2
+			;;
+		--container-run-opts)
+			declare -a "container_run_opts=($2)"
+			shift 2
+			;;
+		--privileged)
+			container_run_opts+=(--privileged)
+			container_cmd=(--second-stage)
+			shift
+			;;
+		--kms)
+			use_kms=1
+			shift
+			;;
+		--print-container-image)
+			printf '%s\n' "$container_image" >&3
+			exit 0
+			;;
+		--resolve-cname)
+			resolve_cname=1
+			shift
+			;;
+		--target)
+			target_dir="$2"
+			shift 2
+			;;
+		--apparmor-profile)
+			apparmor_profile="$2"
+			shift 2
+			;;
+		*)
+			break
+			;;
+	esac
+done
+
+[ -d "$target_dir" ] || mkdir "$target_dir"
+
+container_mount_opts=(
+	-v "$PWD/keyring.gpg:/builder/keyring.gpg:ro"
+	-v "$(realpath "$target_dir"):/builder/.build"
+)
+
+for feature in features/*; do
+	if [ -d "$feature" ]; then
+		container_mount_opts+=(-v "$(realpath -- "$feature"):/builder/$feature:ro")
+	fi
+done
+
+if [ "$container_image" = localhost/builder ]; then
+	dir="$(dirname -- "$(realpath -- "${BASH_SOURCE[0]}")")"
+	"$container_engine" build -t "$container_image" "$dir"
+fi
+
+repo="$(./get_repo)"
+commit="$(./get_commit)"
+timestamp="$(./get_timestamp)"
+default_version="$(./get_version)"
+
+
+if [ "$resolve_cname" = 1 ]; then
+	arch="$("$container_engine" run --rm "${container_run_opts[@]}" "${container_mount_opts[@]}" "$container_image" dpkg --print-architecture)"
+	cname="$("$container_engine" run --rm "${container_run_opts[@]}" "${container_mount_opts[@]}" "$container_image" /builder/parse_features --feature-dir /builder/features --default-arch "$arch" --default-version "$default_version" --cname "$1")"
+	short_commit="$(head -c 8 <<< "$commit")"
+	echo "$cname-$short_commit" >&3
+	exit 0
+fi
+
+make_opts=(
+	REPO="$repo"
+	COMMIT="$commit"
+	TIMESTAMP="$timestamp"
+	DEFAULT_VERSION="$default_version"
+	LOG_WITH_TIMESTAMP="${LOG_WITH_TIMESTAMP:-true}"
+)
+
+if [ "$allow_frankenstein" = 1 ]; then
+	make_opts+=("ALLOW_FRANKENSTEIN=1")
+fi
+
+if [ "$use_kms" = 1 ]; then
+	for e in AWS_DEFAULT_REGION AWS_REGION AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN; do
+		if [ -n "${!e-}" ]; then
+			make_opts+=("$e=${!e}")
+		fi
+	done
+fi
+
+# Default values which can be overriden via 'build.config' file
+tempfs_size=2G
+
+if [[ -f "$PWD"/build.config ]]; then
+	. "$PWD"/build.config
+fi
+
+make_opts+=("TEMPFS_SIZE=$tempfs_size")
+
+if [ -d cert ]; then
+	container_mount_opts+=(-v "$PWD/cert:/builder/cert:ro")
+fi
+
+# Check if builder apparmor profile has to be created or selected
+if [ "$container_engine" = "docker" ] \
+	&& [ ! "$apparmor_profile" ] \
+	&& out=$(sysctl kernel.apparmor_restrict_unprivileged_userns 2> /dev/null) \
+	&& [[ $out = "kernel.apparmor_restrict_unprivileged_userns = 1" ]]; then
+	if [ ! -f /etc/apparmor.d/builder ]; then
+		echo "You are using Docker on a system restricting unprivileged user namespaces with apparmor, which prevents a successful build. For more information please refer to the #Usage section in the README."
+		read -r -p "Do you want to permanently create a new apparmor profile at /etc/apparmor.d/builder to solve the issue? [Y/n] " response
+		response=${response,,}
+		if [[ "$response" =~ ^(yes|y)$ ]]; then
+			if [ ! -f /etc/apparmor.d/builder ]; then
+				profile="abi <abi/4.0>, include <tunables/global> profile builder flags=(unconfined) {userns, }"
+				echo "$profile" | sudo tee /etc/apparmor.d/builder > /dev/null
+				sudo apparmor_parser -r -W /etc/apparmor.d/builder
+			fi
+			echo "Created profile builder at /etc/apparmor.d/builder"
+		else
+			echo Abort.
+			exit 1
+		fi
+	fi
+	apparmor_profile=builder
+fi
+
+# Apply apparmor profile if seleceted
+if [ "$apparmor_profile" ]; then
+	replaced=false
+	for i in "${!container_run_opts[@]}"; do
+			if [ "${container_run_opts[$i]}" = "apparmor=unconfined" ]; then
+					container_run_opts["$i"]="apparmor=$apparmor_profile"
+					replaced=true
+			fi
+	done
+
+	if ! $replaced; then
+			container_run_opts+=(--security-opt "apparmor=$apparmor_profile")
+	fi
+fi
+
+"$container_engine" run --rm "${container_run_opts[@]}" "${container_mount_opts[@]}" "$container_image" ${container_cmd[@]+"${container_cmd[@]}"} fake_xattr make --no-print-directory -C /builder "${make_opts[@]}" "$@" >&3
