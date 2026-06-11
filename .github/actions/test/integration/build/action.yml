@@ -11,7 +11,7 @@ runs:
     - name: Set ENV
       shell: bash
       env:
-        REPO: ghcr.io/gardenlinux/gardenlinux-ccloud
+        REPO: ghcr.io/gardenlinux/gardenlinux-sci
         TAG: ${{ inputs.image_tag }}
         ESP_SIZE: 2  # GiB
         DISK_SIZE: 8  # GiB
@@ -135,7 +135,7 @@ runs:
     # - name: Upload artifacts
     #   uses: actions/upload-artifact@v4
     #   with:
-    #     name: gardenlinux-ccloud-${{ inputs.image_tag }}
+    #     name: gardenlinux-sci-${{ inputs.image_tag }}
     #     path: /opt/${{ inputs.image_tag }}.*
     #     retention-days: 1
     #     overwrite: true
