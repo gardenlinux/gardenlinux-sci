@@ -49,7 +49,7 @@ storage:
     contents:
       inline: |
         # pull the image from GHCR instead of keppel
-        OCI_REPO=ghcr.io/gardenlinux/gardenlinux-ccloud
+        OCI_REPO=ghcr.io/gardenlinux/gardenlinux-sci
         # point to a custom tag to download for the persist step
         OCI_TAG=TAG_GOES_HERE
   # Enable unlimited core dumps for all systemd services

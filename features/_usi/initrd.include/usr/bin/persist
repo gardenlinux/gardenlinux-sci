@@ -75,7 +75,7 @@ export HOME=/root
 
 # source optional config file
 [ -f /sysroot/opt/persist/gl-oci.conf ] && . /sysroot/opt/persist/gl-oci.conf
-OCI_REPO="${OCI_REPO:-keppel.global.cloud.sap/ccloud-ghcr-io-mirror/gardenlinux/gardenlinux-ccloud}"
+OCI_REPO="${OCI_REPO:-keppel.global.cloud.sap/ccloud-ghcr-io-mirror/gardenlinux/gardenlinux-sci}"
 
 DASHED_GARDENLINUX_VERSION=${GARDENLINUX_VERSION//./-}
 # setup OCI_TAG, UKI_SHA and fetch UKI
