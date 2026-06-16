@@ -1,3 +1,54 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json"
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update libvirt package version for rel-2150-dev",
+      "managerFilePatterns": ["/features/sci/exec\\.config$/"],
+      "matchStrings": [
+        "LIBVIRT_VERSION=\"(?<currentValue>[^%]+)%2Bbp2150\""
+      ],
+      "depNameTemplate": "gardenlinux/package-libvirt",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^(?<version>.+)\\+bp2150$",
+      "versioningTemplate": "loose",
+      "autoReplaceStringTemplate": "LIBVIRT_VERSION=\"{{{newValue}}}%2Bbp2150\""
+    },
+    {
+      "customType": "regex",
+      "description": "Update cloud-hypervisor-gl package version for rel-2150-dev",
+      "managerFilePatterns": ["/features/sci/exec\\.config$/"],
+      "matchStrings": [
+        "CLOUD_HYPERVISOR_VERSION=\"(?<currentValue>[^%]+)%2Bbp2150\""
+      ],
+      "depNameTemplate": "gardenlinux/package-cloud-hypervisor-gl",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^(?<version>.+)\\+bp2150$",
+      "versioningTemplate": "loose",
+      "autoReplaceStringTemplate": "CLOUD_HYPERVISOR_VERSION=\"{{{newValue}}}%2Bbp2150\""
+    },
+    {
+      "customType": "regex",
+      "description": "Update edk2-cloud-hypervisor-gl package version for rel-2150-dev",
+      "managerFilePatterns": ["/features/sci/exec\\.config$/"],
+      "matchStrings": [
+        "EDK2_VERSION=\"(?<currentValue>[^%]+)%2Bbp2150\""
+      ],
+      "depNameTemplate": "gardenlinux/package-edk2-cloud-hypervisor-gl",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^(?<version>.+)\\+bp2150$",
+      "versioningTemplate": "loose",
+      "autoReplaceStringTemplate": "EDK2_VERSION=\"{{{newValue}}}%2Bbp2150\""
+    }
+  ],
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "gardenlinux/package-libvirt",
+        "gardenlinux/package-cloud-hypervisor-gl",
+        "gardenlinux/package-edk2-cloud-hypervisor-gl"
+      ],
+      "groupName": "SCI custom packages"
+    }
+  ]
 }
