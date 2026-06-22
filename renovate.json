@@ -40,15 +40,5 @@
       "versioningTemplate": "loose",
       "autoReplaceStringTemplate": "EDK2_VERSION=\"{{{newValue}}}%2Bbp2150\""
     }
-  ],
-  "packageRules": [
-    {
-      "matchPackageNames": [
-        "gardenlinux/package-libvirt",
-        "gardenlinux/package-cloud-hypervisor-gl",
-        "gardenlinux/package-edk2-cloud-hypervisor-gl"
-      ],
-      "groupName": "SCI custom packages"
-    }
   ]
 }
