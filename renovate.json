@@ -48,7 +48,8 @@
         "gardenlinux/package-cloud-hypervisor-gl",
         "gardenlinux/package-edk2-cloud-hypervisor-gl"
       ],
-      "groupName": "SCI custom packages"
+      "groupName": "SCI custom packages",
+      "separateMajorMinor": false
     }
   ]
 }
