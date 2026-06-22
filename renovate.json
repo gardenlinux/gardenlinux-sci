@@ -7,5 +7,16 @@
     "$default",
     "/^rel-\\d+-dev$/"
   ],
-  "useBaseBranchConfig": "merge"
+  "useBaseBranchConfig": "merge",
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "gardenlinux/package-libvirt",
+        "gardenlinux/package-cloud-hypervisor-gl",
+        "gardenlinux/package-edk2-cloud-hypervisor-gl"
+      ],
+      "groupName": "SCI custom packages",
+      "separateMajorMinor": false
+    }
+  ]
 }
