@@ -34,7 +34,7 @@ jobs:
       matrix: ${{ fromJson(needs.generate_matrix_publish.outputs.matrix) }}
       max-parallel: 8
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           submodules: true
       - uses: oras-project/setup-oras@38de303aac69abb66f3e6255b7198bff35f323e3 # v2
@@ -114,7 +114,7 @@ jobs:
       matrix: ${{ fromJson(needs.generate_matrix_publish.outputs.matrix) }}
       max-parallel: 1
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           submodules: true
       - name: Install python-gardenlinux-lib
