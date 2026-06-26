@@ -17,6 +17,13 @@
       ],
       "groupName": "SCI custom packages",
       "separateMajorMinor": false
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "Group GitHub Actions",
+      "separateMajorMinor": false
     }
   ]
 }
