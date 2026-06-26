@@ -8,6 +8,9 @@
     "/^rel-\\d+-dev$/"
   ],
   "useBaseBranchConfig": "merge",
+  "git-submodules": {
+    "enabled": true
+  },
   "packageRules": [
     {
       "matchPackageNames": [
@@ -16,6 +19,18 @@
         "gardenlinux/package-edk2-cloud-hypervisor-gl"
       ],
       "groupName": "SCI custom packages",
+      "separateMajorMinor": false
+    },
+    {
+      "matchManagers": [
+        "git-submodules",
+        "custom.regex"
+      ],
+      "matchDepNames": [
+        "gardenlinux/gardenlinux",
+        "gardenlinux"
+      ],
+      "groupName": "gardenlinux upstream",
       "separateMajorMinor": false
     }
   ]
