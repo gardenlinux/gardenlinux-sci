@@ -39,6 +39,25 @@
       "extractVersionTemplate": "^(?<version>.+)\\+bp1877$",
       "versioningTemplate": "loose",
       "autoReplaceStringTemplate": "EDK2_VERSION=\"{{{newValue}}}%2Bbp1877\""
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      "matchStrings": [
+        "uses:\\s*gardenlinux/gardenlinux/\\.github/workflows/[^@\\s]+@(?<currentDigest>[a-f0-9]{40})"
+      ],
+      "depNameTemplate": "gardenlinux/gardenlinux",
+      "packageNameTemplate": "https://github.com/gardenlinux/gardenlinux",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "rel-1877"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchDatasources": ["git-refs"],
+      "matchDepNames": ["gardenlinux/gardenlinux", "gardenlinux"],
+      "versioning": "loose",
+      "allowedVersions": "/^rel-1877$/"
     }
   ]
 }
