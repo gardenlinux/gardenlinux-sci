@@ -1,3 +1,4 @@
 [submodule "gardenlinux"]
 	path = gardenlinux
 	url = https://github.com/gardenlinux/gardenlinux
+	branch = rel-2150
