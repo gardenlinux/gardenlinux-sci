@@ -19,7 +19,7 @@ jobs:
           submodules: recursive
   build:
     needs: [checkout]
-    uses: gardenlinux/gardenlinux/.github/workflows/build.yml@fb18553b6374966548cdcbcd50cf8ef7f36c29d9
+    uses: gardenlinux/gardenlinux/.github/workflows/build.yml@624399f5f8f575252961644f5b2cdcce8bab84cc
     with:
       version: ${{ inputs.version || 'now' }}
       # to set target to "release" or "nightly" we need proper KMS secrets
@@ -50,7 +50,7 @@ jobs:
     name: Run glcli to publish to OCI
     needs: [build]
     # use custom upload_oci.yml as we do not sign the images
-    # uses: gardenlinux/gardenlinux/.github/workflows/upload_oci.yml@fb18553b6374966548cdcbcd50cf8ef7f36c29d9
+    # uses: gardenlinux/gardenlinux/.github/workflows/upload_oci.yml@624399f5f8f575252961644f5b2cdcce8bab84cc
     uses: ./.github/workflows/upload_oci.yml
     with:
       version: ${{ needs.build.outputs.version }}
