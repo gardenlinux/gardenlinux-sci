@@ -15,12 +15,12 @@
         <disk type='file' device='disk'>
             <driver name='qemu' type='qcow2' />
             <source file='/var/lib/libvirt/images/ubuntu.qcow2' />
-            <target dev='hda' bus='ide' />
+            <target dev='vda' bus='virtio' />
         </disk>
-        <disk type='file' device='cdrom'>
+        <disk type='file' device='disk'>
             <driver name='qemu' type='raw' />
             <source file='/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso' />
-            <target dev='hdb' bus='ide' />
+            <target dev='vdb' bus='virtio' />
             <readonly />
         </disk>
         <interface type='network'>
