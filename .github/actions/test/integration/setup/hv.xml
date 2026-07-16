@@ -15,7 +15,7 @@
         <disk type='file' device='disk'>
             <driver name='qemu' type='qcow2' />
             <source file='/var/lib/libvirt/images/HV_NAME_GOES_HERE.qcow2' />
-            <target dev='hda' bus='ide' />
+            <target dev='vda' bus='virtio' />
         </disk>
         <interface type='network'>
             <mac address='MAC_GOES_HERE' />
