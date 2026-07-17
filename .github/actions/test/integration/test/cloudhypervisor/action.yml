@@ -52,7 +52,14 @@ runs:
             IP=\$(virsh -c ch:///session domifaddr VM-CHV | awk '/ipv4/ {print \$4}' | cut -d'/' -f1)
             if [ -z "\$IP" ]; then
               echo "No IP address found for VM. Retrying..."
-            elif ssh \$SSH_OPTS "\$USER@\$IP" 'exit' ; then
+            elif (( i >= MAX_ITER - 2 )); then
+              # Show SSH errors on last 3 attempts for debugging
+              if ssh \$SSH_OPTS "\$USER@\$IP" 'exit'; then
+                echo "VM is up at IP: \$IP"
+                ssh \$SSH_OPTS "\$USER@\$IP" 'echo "Hello, World!" > /opt/hello.txt'
+                break
+              fi
+            elif ssh \$SSH_OPTS "\$USER@\$IP" 'exit' 2>/dev/null; then
               echo "VM is up at IP: \$IP"
               # create a dummy file for verification later
               ssh \$SSH_OPTS "\$USER@\$IP" 'echo "Hello, World!" > /opt/hello.txt'
@@ -60,6 +67,18 @@ runs:
             fi
             if (( i == MAX_ITER )); then
               echo "Timeout waiting for VM to respond to SSH."
+              echo "=== DIAGNOSTICS ==="
+              echo "--- virsh -c ch:///session domifaddr VM-CHV ---"
+              virsh -c ch:///session domifaddr VM-CHV || true
+              echo "--- ip addr show virbr0 ---"
+              ip addr show virbr0 || true
+              echo "--- ip route ---"
+              ip route || true
+              echo "--- arp -n ---"
+              arp -n 2>/dev/null || ip neigh || true
+              echo "--- ssh -v attempt ---"
+              ssh -v \$SSH_OPTS "\$USER@\$IP" 'exit' 2>&1 || true
+              echo "=== END DIAGNOSTICS ==="
               exit 1
             fi
             echo "Waiting for VM to respond to SSH... (\$i/\$MAX_ITER)"
@@ -111,7 +130,7 @@ runs:
 
           MAX_ITER=15
           for ((i=1; i<=MAX_ITER; i++)); do
-            if ssh \$SSH_OPTS "\$USER@\$IP" 'exit' ; then
+            if ssh \$SSH_OPTS "\$USER@\$IP" 'exit' 2>/dev/null; then
               echo "VM is up at IP: \$IP"
               # verify the migration by checking the dummy file
               if ssh \$SSH_OPTS "\$USER@\$IP" 'test -f /opt/hello.txt'; then
@@ -124,6 +143,14 @@ runs:
             fi
             if (( i == MAX_ITER )); then
               echo "Timeout waiting for VM to respond to SSH."
+              echo "=== DIAGNOSTICS ==="
+              echo "--- ip addr show virbr0 ---"
+              ip addr show virbr0 || true
+              echo "--- ip route ---"
+              ip route || true
+              echo "--- ssh -v attempt ---"
+              ssh -v \$SSH_OPTS "\$USER@\$IP" 'exit' 2>&1 || true
+              echo "=== END DIAGNOSTICS ==="
               exit 1
             fi
             echo "Waiting for VM to respond to SSH... (\$i/\$MAX_ITER)"

@@ -34,6 +34,44 @@ runs:
         scp $SSH_OPTS $USER@$HV2_IP:/var/log/QEMU.log "serial-VM-QEMU-HV2.log" || true
         scp $SSH_OPTS $USER@$HV2_IP:/var/log/CHV.log "serial-VM-CHV-HV2.log" || true
 
+    - name: Obtain network diagnostics from hypervisors
+      shell: bash
+      run: |
+        KEY=/opt/ssh_host_ed25519_key
+        SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        USER="root"
+
+        for HV_NAME in HV1 HV2; do
+          IP="192.168.122.$([[ $HV_NAME == HV1 ]] && echo 2 || echo 3)"
+
+          ssh $SSH_OPTS $USER@$IP "
+            echo '=== ip addr ==='
+            ip addr
+            echo '=== ip route ==='
+            ip route
+            echo '=== bridge link ==='
+            bridge link 2>/dev/null || true
+            echo '=== arp -n ==='
+            arp -n 2>/dev/null || ip neigh || true
+            echo '=== iptables -L -n ==='
+            iptables -L -n 2>/dev/null || true
+            echo '=== iptables -t nat -L -n ==='
+            iptables -t nat -L -n 2>/dev/null || true
+            echo '=== virsh net-list ==='
+            virsh net-list --all 2>/dev/null || true
+            echo '=== virsh net-dumpxml default ==='
+            virsh net-dumpxml default 2>/dev/null || true
+            echo '=== dnsmasq leases ==='
+            cat /var/lib/libvirt/dnsmasq/*.leases 2>/dev/null || true
+            echo '=== systemctl status systemd-networkd ==='
+            systemctl status systemd-networkd --no-pager 2>/dev/null || true
+            echo '=== networkctl status ==='
+            networkctl status --no-pager 2>/dev/null || true
+            echo '=== ssh -V ==='
+            ssh -V 2>&1 || true
+          " > "network-diag-${HV_NAME}.log" 2>&1 || true
+        done
+
     - name: Set permissions
       shell: bash
       run: |
