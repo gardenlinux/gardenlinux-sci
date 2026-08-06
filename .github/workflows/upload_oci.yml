@@ -44,7 +44,7 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: 'v2.4.1'
+          cosign-release: 'v3.1.3'
       - name: Set flavor version reference
         run: |
           git rev-parse HEAD | cut -c1-8 | tee COMMIT
