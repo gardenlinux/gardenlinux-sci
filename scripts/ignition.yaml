@@ -1,0 +1,58 @@
+{
+  "ignition": {
+    "version": "3.6.0"
+  },
+  "storage": {
+    "files": [
+      {
+        "overwrite": true,
+        "path": "/etc/hostname",
+        "contents": {
+          "source": "data:,node001-test%0A"
+        },
+        "mode": 420
+      },
+      {
+        "overwrite": true,
+        "path": "/etc/multipath.conf",
+        "contents": {
+          "compression": "",
+          "source": "data:;base64,ZGVmYXVsdHMgewogIHVzZXJfZnJpZW5kbHlfbmFtZXMgICAgICAgICBubwogIGZpbmRfbXVsdGlwYXRocyAgICAgICAgICAgICB5ZXMKICBwcmlvICAgICAgICAgICAgICAgICAgICAgICAgImFsdWEiCiAgcGF0aF9ncm91cGluZ19wb2xpY3kgICAgICAgIGdyb3VwX2J5X3ByaW8KICBwYXRoX3NlbGVjdG9yICAgICAgICAgICAgICAgImhpc3RvcmljYWwtc2VydmljZS10aW1lIDAiCiAgZmFpbGJhY2sgICAgICAgICAgICAgICAgICAgIGltbWVkaWF0ZQogIG5vX3BhdGhfcmV0cnkgICAgICAgICAgICAgICAxCiAgcmV0YWluX2F0dGFjaGVkX2h3X2hhbmRsZXIgIHllcwp9CgpibGFja2xpc3QgewogIHByb3RvY29sIHNjc2k6c2FzCiAgcHJvdG9jb2wgc2NzaTphdGEKICBwcm90b2NvbCBudm1lOnBjaWUKfQoKZGV2aWNlcyB7CiAgZGV2aWNlIHsKICAgIHZlbmRvciAgICAgICAgICAgICAgIk5FVEFQUCIKICAgIHByb2R1Y3QgICAgICAgICAgICAgIioiCiAgICBoYXJkd2FyZV9oYW5kbGVyICAgICIxIGFsdWEiCiAgfQp9Cg=="
+        },
+        "mode": 420
+      },
+      {
+        "path": "/opt/persist/hugepages.env",
+        "mode": 420,
+        "contents": {
+          "source": "data:,NON_HUGEPAGES_PM=1000%0A"
+        }
+      },
+      {
+        "overwrite": true,
+        "path": "/etc/ssh/sshd_config",
+        "contents": {
+          "source": "data:;base64,IyBEaXNhYmxlIHJvb3QgbG9naW4uClBlcm1pdFJvb3RMb2dpbiBubwoKIyBPbmx5IHVzZSB0aGUgbW9yZSBzZWN1cmUgU1NIdjIgcHJvdG9jb2wuClByb3RvY29sIDIKCiMgTm8gWDExIGZvcndhcmRpbmcuClgxMUZvcndhcmRpbmcgbm8KCiMgQ2hlY2sgcGVybWlzc2lvbnMgb2YgY29uZmlndXJhdGlvbiBmaWxlcyByZWxhdGVkIHRvIFNTSCBvbiBsb2dpbi4KU3RyaWN0TW9kZXMgeWVzCgojIERpc2FibGUgaG9zdC1iYXNlZCBhdXRoZW50aWNhdGlvbnMuCklnbm9yZVJob3N0cyB5ZXMKSG9zdGJhc2VkQXV0aGVudGljYXRpb24gbm8KCiMgU2V0IGxvZyBsZXZlbCB0byBiZSB2ZXJib3NlLgpMb2dMZXZlbCBWRVJCT1NFCgojIEVuc3VyZSB1c2FnZSBvZiBQQU0KVXNlUEFNIHllcwoKIyBEaXNhYmxlIG1lc3NhZ2Ugb2YgdGhlIGRheQpQcmludE1vdGQgbm8KCiMgQWxsb3cgY2xpZW50IHRvIHBhc3MgbG9jYWxlIGVudmlyb25tZW50IHZhcmlhYmxlcwpBY2NlcHRFbnYgTEFORwoKIyBvdmVycmlkZSBkZWZhdWx0IG9mIG5vIHN1YnN5c3RlbXMKU3Vic3lzdGVtIHNmdHAgL3Vzci9saWIvb3BlbnNzaC9zZnRwLXNlcnZlciAtZiBBVVRIUFJJViAtbCBJTkZPCgojIGF1dG9sb2dvdXQgaW5hY3RpdmUgdXNlcnMgYWZ0ZXIgMTAgbWludXRlcwpDbGllbnRBbGl2ZUludGVydmFsIDYwMApDbGllbnRBbGl2ZUNvdW50TWF4IDAKCiMgQWxsb3cgcGFzc3dvcmQgYXV0aGVudGljYXRpb24KQXV0aGVudGljYXRpb25NZXRob2RzIHBhc3N3b3JkClBhc3N3b3JkQXV0aGVudGljYXRpb24geWVzCgojIFN1cHBvcnRlZCBIb3N0S2V5IGFsZ29yaXRobXMgYnkgb3JkZXIgb2YgcHJlZmVyZW5jZS4KSG9zdEtleSAvZXRjL3NzaC9zc2hfaG9zdF9lZDI1NTE5X2tleQpIb3N0S2V5IC9ldGMvc3NoL3NzaF9ob3N0X3JzYV9rZXkK"
+        },
+        "mode": 384
+      },
+      {
+        "overwrite": true,
+        "path": "/opt/dbgimage/image",
+        "contents": {
+          "source": "data:,ghcr.io%2Fgardenlinux%2Fccloud-toolbox%3A2150.0.0"
+
+        },
+        "mode": 384
+      }
+    ],
+    "links": [
+      {
+        "path": "/etc/systemd/system/multi-user.target.wants/ssh.service",
+        "target": "/lib/systemd/system/ssh.service",
+        "hard": false,
+        "overwrite": true
+      }
+    ]
+  }
+}
