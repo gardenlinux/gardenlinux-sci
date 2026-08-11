@@ -14,7 +14,7 @@ on:
 jobs:
   generate_matrix_publish:
     name: Generate flavors matrix to publish
-    uses: gardenlinux/gardenlinux/.github/workflows/build_flavors_matrix.yml@624399f5f8f575252961644f5b2cdcce8bab84cc
+    uses: gardenlinux/gardenlinux/.github/workflows/build_flavors_matrix.yml@409e9b640087ade203321a8d63bd1651f4677205
     with:
       flags: '${{ inputs.flavor_filter }} --no-arch --json-by-arch --build --test'
   upload_gl_artifacts:
