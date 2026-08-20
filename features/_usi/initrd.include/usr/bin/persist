@@ -82,7 +82,7 @@ DASHED_GARDENLINUX_VERSION=${GARDENLINUX_VERSION//./-}
 OCI_TAG=${OCI_TAG:-"$GARDENLINUX_VERSION-$VARIANT_ID-${DASHED_GARDENLINUX_VERSION}-$GARDENLINUX_COMMIT_ID"}
 OCI_TAG=${OCI_TAG//_/-} # replace underscores with dashes
 UKI_SHA=$(oras manifest fetch "$OCI_REPO:${OCI_TAG}" | jq -r '.layers[] | select(.mediaType=="application/io.gardenlinux.uki") | .digest')
-oras blob fetch "$OCI_REPO@$UKI_SHA" -o "$esp_dir/EFI/Linux/uki.efi"
+oras blob fetch "$OCI_REPO@$UKI_SHA" -o "$esp_dir/EFI/Linux/${GARDENLINUX_CNAME}.efi"
 
 if [ "$ENABLE_HUGEPAGE_SETUP" = "true" ]; then
   echo "hugepagesz=2MB hugepages=$hugepages" > /tmp/cmdlinef
