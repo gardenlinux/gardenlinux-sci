@@ -1,3 +1,3 @@
-FROM ghcr.io/gardenlinux/builder:98ee0d480844b2d041524841bfdbbb4007d32248@sha256:d7063f72c0db3e7cdd618136efb292379794a0c4d4b5ddfc3759795c17d963ab
+FROM ghcr.io/gardenlinux/builder:0196add0ce875ac0b7721c19b2ee3ac37cf84387@sha256:a25e60658d595f0040b516fedaa067802e69f40810ebdd95ade5a59385eabf4c
 
 RUN sed 's/version="$2"/version=\$(echo \$2 | cut -d. -f 1-2).0/' -i /builder/bootstrap
