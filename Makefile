@@ -2,6 +2,7 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -euo pipefail -c
 
 ROOT_DIR := $(shell git rev-parse --show-toplevel)
+SED := $(shell command -v gsed 2>/dev/null || command -v sed)
 
 # Default to latest commit if COMMIT is not specified
 COMMIT ?= $(shell git ls-remote https://github.com/gardenlinux/gardenlinux.git HEAD | cut -f1)
@@ -25,11 +26,18 @@ prepare:
 
 update:
 	# update gardenlinux submodule to specified or latest commit
-	cd $(ROOT_DIR)/gardenlinux && git fetch && git checkout $(COMMIT) && cd ..
-	git add gardenlinux
+	cd $(ROOT_DIR)/gardenlinux && git fetch && git checkout $(COMMIT) && \
+	GL_VERSION=$$(git tag --points-at $(COMMIT)) && cd .. ; \
+	if [ -n "$$GL_VERSION" ]; then \
+		echo "$$GL_VERSION" > $(ROOT_DIR)/VERSION; \
+		echo "Updated VERSION to $$GL_VERSION"; \
+	else \
+		echo "No tag found for $(COMMIT), VERSION unchanged"; \
+	fi
+	git add gardenlinux VERSION
 
 	# update workflow commit references
-	sed -i -E 's|(gardenlinux/gardenlinux/.github/workflows/[^@]*)@[0-9a-f]{40}|\1@$(COMMIT)|g' $(ROOT_DIR)/.github/workflows/*.y*ml
+	$(SED) -i -E 's|(gardenlinux/gardenlinux/.github/workflows/[^@]*)@[0-9a-f]{40}|\1@$(COMMIT)|g' $(ROOT_DIR)/.github/workflows/*.y*ml
 
 	# update features
 	mkdir -p $(ROOT_DIR)/features
@@ -55,6 +63,18 @@ update:
 			cd $(ROOT_DIR)/bin && ln -s "../gardenlinux/bin/$$script" "$$script"; \
 		fi; \
 	done
+
+	# update Containerfile if builder image changed
+	new_builder_image=$$(grep -m1 '^container_image=' $(ROOT_DIR)/gardenlinux/build | cut -d= -f2); \
+	current_builder_image=$$(head -1 $(ROOT_DIR)/Containerfile | $(SED) 's/^FROM //; s/@sha256:.*//'); \
+	if [ "$$new_builder_image" != "$$current_builder_image" ]; then \
+		echo "Builder image changed: $$current_builder_image -> $$new_builder_image"; \
+		new_digest=$$(crane digest "$$new_builder_image") || { echo "ERROR: Failed to resolve digest for $$new_builder_image. Is crane installed?"; exit 1; }; \
+		$(SED) -i -E "1s|^FROM .*|FROM $${new_builder_image}@$${new_digest}|" $(ROOT_DIR)/Containerfile; \
+		echo "Updated Containerfile to: FROM $${new_builder_image}@$${new_digest}"; \
+	else \
+		echo "Builder image unchanged, skipping Containerfile update"; \
+	fi
 
 clean:
 	git reset --soft
