@@ -26,8 +26,12 @@ prepare:
 
 update:
 	# update gardenlinux submodule to specified or latest commit
-	cd $(ROOT_DIR)/gardenlinux && git fetch && git checkout $(COMMIT) && \
-	GL_VERSION=$$(git tag --points-at $(COMMIT)) && cd .. ; \
+	set -eu ; \
+	cd $(ROOT_DIR)/gardenlinux; \
+	git fetch; \
+	git checkout $(COMMIT); \
+	GL_VERSION=$$(git tag --points-at $(COMMIT)); \
+	cd .. ; \
 	if [ -n "$$GL_VERSION" ]; then \
 		echo "$$GL_VERSION" > $(ROOT_DIR)/VERSION; \
 		echo "Updated VERSION to $$GL_VERSION"; \
