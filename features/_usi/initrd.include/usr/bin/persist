@@ -25,9 +25,10 @@ case "$(uname -m)" in
 esac
 
 # prepare bootloader
-esp_dir="/sysroot/efi"
+sysroot="/sysroot"
+esp_dir="$sysroot/efi"
 mkdir -p "$esp_dir/EFI/BOOT"
-cp "/sysroot/usr/lib/systemd/boot/efi/systemd-boot$(tr '[:upper:]' '[:lower:]' <<< "$uefi_arch").efi" "$esp_dir/EFI/BOOT/BOOT$uefi_arch.EFI"
+cp "$sysroot/usr/lib/systemd/boot/efi/systemd-boot$(tr '[:upper:]' '[:lower:]' <<< "$uefi_arch").efi" "$esp_dir/EFI/BOOT/BOOT$uefi_arch.EFI"
 
 mkdir -p "$esp_dir/loader"
 cat > "$esp_dir/loader/loader.conf" << EOF
@@ -84,19 +85,117 @@ OCI_TAG=${OCI_TAG//_/-} # replace underscores with dashes
 UKI_SHA=$(oras manifest fetch "$OCI_REPO:${OCI_TAG}" | jq -r '.layers[] | select(.mediaType=="application/io.gardenlinux.uki") | .digest')
 oras blob fetch "$OCI_REPO@$UKI_SHA" -o "$esp_dir/EFI/Linux/${GARDENLINUX_CNAME}.efi"
 
+addon_dir="$esp_dir/loader/addons"
+
+create_addon_from_stub() {
+    local name=${1:?usage: make_systemd_cmdline_addon NAME 'CMDLINE'}
+    local cmdline=${2:?usage: make_systemd_cmdline_addon NAME 'CMDLINE'}
+
+    # Target installation root and the systemd EFI addon template.
+    local stub="$sysroot/usr/lib/systemd/boot/efi/addonx64.efi.stub"
+
+    local addon cmdline_file
+    local alignment_hex alignment
+    local idx section size_hex vma_hex
+    local size vma end max_end next_vma next_vma_hex
+
+    # Keep writes confined to addon_dir. Permit "foo" or "foo.addon.efi".
+    [[ $name != */* && $name != .* && -n $name ]] || {
+        printf 'Invalid addon name: %q\n' "$name" >&2
+        return 2
+    }
+
+    [[ $name == *.addon.efi ]] || name="${name}.addon.efi"
+
+    [[ -r $stub ]] || {
+        printf 'Cannot read systemd addon stub: %s\n' "$stub" >&2
+        return 1
+    }
+
+    mkdir -p -- "$addon_dir" || return 1
+    addon="$addon_dir/$name"
+
+    tmpdir="/tmp/$(basename "$0").$RANDOM"
+    trap 'rm -rf -- "$tmpdir"' RETURN
+    mkdir -p "$tmpdir"
+    cmdline_file="$tmpdir/cmdline"
+
+    # systemd-stub expects UTF-8/ASCII kernel parameters as a NUL-terminated
+    # string in the PE .cmdline section. Do not add a trailing newline.
+    printf '%s\0' "$cmdline" >"$cmdline_file" || return 1
+
+    # BusyBox awk-compatible: it only extracts the field; Bash converts hex.
+    alignment_hex=$(
+        objdump -p "$stub" |
+        awk '$1 == "SectionAlignment" { print $2; exit }'
+    )
+
+    [[ $alignment_hex =~ ^[0-9A-Fa-f]+$ ]] || {
+        printf 'Could not read PE SectionAlignment from: %s\n' "$stub" >&2
+        return 1
+    }
+
+    alignment=$((16#$alignment_hex))
+
+    (( alignment > 0 )) || {
+        printf 'Invalid PE SectionAlignment: %s\n' "$alignment_hex" >&2
+        return 1
+    }
+
+    # Compute:
+    #
+    #   max_end = max(existing_section_VMA + existing_section_size)
+    #   next_vma = align_up(max_end, SectionAlignment)
+    #
+    # This avoids assuming objdump lists sections in VMA order. BusyBox awk
+    # filters/prints fields only; Bash handles all hexadecimal arithmetic.
+    max_end=0
+
+    while read -r idx section size_hex vma_hex; do
+        [[ $idx =~ ^[0-9]+$ ]] || continue
+        [[ $size_hex =~ ^[0-9A-Fa-f]+$ ]] || continue
+        [[ $vma_hex =~ ^[0-9A-Fa-f]+$ ]] || continue
+
+        size=$((16#$size_hex))
+        vma=$((16#$vma_hex))
+        end=$((vma + size))
+
+        (( end > max_end )) && max_end=$end
+    done < <(
+        objdump -h "$stub" |
+        awk '$1 ~ /^[0-9]+$/ { print $1, $2, $3, $4 }'
+    )
+
+    (( max_end > 0 )) || {
+        printf 'Could not determine existing PE section layout: %s\n' "$stub" >&2
+        return 1
+    }
+
+    next_vma=$(( (max_end + alignment - 1) / alignment * alignment ))
+    printf -v next_vma_hex '0x%x' "$next_vma"
+
+    # Build to a temporary pathname and atomically move it into place.
+    objcopy \
+        --add-section ".cmdline=$cmdline_file" \
+        --change-section-vma ".cmdline=$next_vma_hex" \
+        --set-section-alignment ".cmdline=$alignment" \
+        --set-section-flags ".cmdline=alloc,load,readonly,data,contents" \
+        "$stub" "$tmpdir/$name" || return 1
+
+    mv -f -- "$tmpdir/$name" "$addon" || return 1
+
+    printf 'Created addon: %s\n' "$addon"
+    printf '  SectionAlignment: 0x%x\n' "$alignment"
+    printf '  .cmdline RVA:     %s\n' "$next_vma_hex"
+}
+
+# if intel cpu
+if grep -q "GenuineIntel" /proc/cpuinfo; then
+  create_addon_from_stub "disable-intel-idle-states" "intel_idle.max_cstate=0"
+fi
+
 if [ "$ENABLE_HUGEPAGE_SETUP" = "true" ]; then
-  echo "hugepagesz=2MB hugepages=$hugepages" > /tmp/cmdlinef
-  addon="/sysroot/usr/lib/systemd/boot/efi/addonx64.efi.stub"
-  offs=$(objdump -h $addon | awk 'NF==7 {size=$3;offset=$4} END {print "16#"size" + 16#"offset}')
-  if [[ $offs -eq 0 ]]; then
-    echo "the offset can't be calculated for the stub addon"
-    exit 1
-  fi
-  align=$(objdump -p $addon | grep Section | awk '{ print "16#"$2}')
-  offs=$((offs + "$align" - offs % "$align"))
-  addon_dir="$esp_dir/loader/addons"
-  mkdir -p "$addon_dir"
-  objcopy --add-section .cmdline=/tmp/cmdlinef --change-section-vma .cmdline=$(printf 0x%x $offs) $addon "$addon_dir/hugepages.addon.efi"
+  create_addon_from_stub "hugepages" "hugepagesz=2MB hugepages=$hugepages"
 fi
 
 # debug container
