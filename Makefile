@@ -2,6 +2,7 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -euo pipefail -c
 
 ROOT_DIR := $(shell git rev-parse --show-toplevel)
+SED := $(shell command -v gsed 2>/dev/null || command -v sed)
 
 # Default to latest commit if COMMIT is not specified
 COMMIT ?= $(shell git ls-remote https://github.com/gardenlinux/gardenlinux.git HEAD | cut -f1)
@@ -29,7 +30,7 @@ update:
 	git add gardenlinux
 
 	# update workflow commit references
-	sed -i -E 's|(gardenlinux/gardenlinux/.github/workflows/[^@]*)@[0-9a-f]{40}|\1@$(COMMIT)|g' $(ROOT_DIR)/.github/workflows/*.y*ml
+	$(SED) -i -E 's|(gardenlinux/gardenlinux/.github/workflows/[^@]*)@[0-9a-f]{40}|\1@$(COMMIT)|g' $(ROOT_DIR)/.github/workflows/*.y*ml
 
 	# update features
 	mkdir -p $(ROOT_DIR)/features
@@ -55,6 +56,13 @@ update:
 			cd $(ROOT_DIR)/bin && ln -s "../gardenlinux/bin/$$script" "$$script"; \
 		fi; \
 	done
+
+	# update builder image
+	new_builder_image=$$(grep -m1 '^container_image=' $(ROOT_DIR)/gardenlinux/build | cut -d= -f2); \
+	current_builder_image=$$(grep -m1 '^container_image=' $(ROOT_DIR)/build | cut -d= -f2); \
+	if [ "$$new_builder_image" != "$$current_builder_image" ]; then \
+		$(SED) -i -E 's|^container_image=.*|container_image=$$new_builder_image|' $(ROOT_DIR)/build; \
+	fi
 
 clean:
 	git reset --soft
