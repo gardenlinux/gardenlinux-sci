@@ -29,7 +29,7 @@ update:
 	cd $(ROOT_DIR)/gardenlinux && git fetch && git checkout $(COMMIT) && \
 	GL_VERSION=$$(git tag --points-at $(COMMIT)) && cd .. ; \
 	if [ -n "$$GL_VERSION" ]; then \
-		echo "$$GL_VERSION" > $(ROOT_DIR)/VERSION; \
+		echo "$$GL_VERSION.0" > $(ROOT_DIR)/VERSION; \
 		echo "Updated VERSION to $$GL_VERSION"; \
 	else \
 		echo "No tag found for $(COMMIT), VERSION unchanged"; \
