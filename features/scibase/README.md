@@ -1,4 +1,4 @@
-## Feature: sci
+## Feature: scibase
 
 ### Description
 
@@ -8,8 +8,8 @@ This platform feature creates the base artifact for SCI Baremetal OS.
 
 ### Features
 
-This feature the base for the SCI Baremetal OS including the common features
-and flags.
+This feature serves as the base layer for the SCI Baremetal OS and includes the
+common features and flags.
 
 ### Unit testing
 
