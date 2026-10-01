@@ -18,7 +18,7 @@ targets:
         test-platform: false
         publish: false
       - features:
-          - scibase
+          - controlplane
           - _usi
         arch: amd64
         build: true
