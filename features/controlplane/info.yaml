@@ -1,0 +1,5 @@
+description: "SCI Baremetal OS (controlplane)"
+type: element
+features:
+  include:
+    - scibase
