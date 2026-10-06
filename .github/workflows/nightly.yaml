@@ -31,6 +31,13 @@ jobs:
       # aws_kms_role: ${{ secrets.KMS_SIGNING_IAM_ROLE }}
       # aws_oidc_session: ${{ secrets.AWS_OIDC_SESSION }}
       # secureboot_db_kms_arn: ${{ secrets.SECUREBOOT_DB_KMS_ARN }}
+  test_qemu:
+    name: QEMU integration test baremetal-sci_usi (amd64)
+    needs: [build]
+    uses: gardenlinux/gardenlinux/.github/workflows/test_flavor_qemu.yml@c15e9789b16b0e64019b52b45fb6fa3b3c0f608c
+    with:
+      flavor: baremetal-sci_usi
+      arch: amd64
   meta:
     name: Compute image metadata
     needs: [build]
