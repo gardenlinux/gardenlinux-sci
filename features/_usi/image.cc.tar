@@ -97,6 +97,7 @@ mv "$rootfs/initrd" "$dest_dir"/initrd
 cp "$rootfs/boot/$kernel" "$dest_dir"/vmlinuz
 cp "$erofs" "$dest_dir"/squashfs
 ln "$dest_dir/squashfs" "$dest_dir/root.squashfs"
+echo "$cmdline" > "$dest_dir/cmdline"
 
 rm "$erofs"
 umount -l "$rootfs/proc"
