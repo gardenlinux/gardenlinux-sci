@@ -22,7 +22,8 @@ mksquashfs "$chroot_dir" root.squashfs -noappend -comp xz -mkfs-time "$BUILDER_T
 sha256sum root.squashfs | head -c 64 > root.squashfs.sha256sum
 echo root.squashfs.sha256sum | cpio -H newc -o | xz --check=crc32 >> initrd
 
-echo "console=ttyS0 gl.live=1 gl.ovl=/:tmpfs" > cmdline
+read -r _ cmdline < "$chroot_dir/etc/kernel/cmdline"
+echo "$cmdline" > cmdline
 
 touch tmp_initrd
 [[ ! -e "$chroot_dir/initrd" ]]

@@ -11,12 +11,36 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        flavor:
-          - baremetal-sci_usi
-          - baremetal-sci_usidev
-          - baremetal-sci_pxe
-          - baremetal-capi
-          - baremetal-controlplane_usi
+        include:
+          # sci flavors: have openstack system users (nova, neutron, kvm-node-agent, openstack)
+          # created by the sci feature; ipmievd is intentionally disabled by sci preset;
+          # nftables is installed so sshguard uses nftables backend (not iptables)
+          - flavor: baremetal-sci_usi
+            expected_users: nova,neutron,kvm-node-agent,openstack
+            deselect_tests:
+              - integration/core/test_services.py::test_metal_ipmievd_service_enabled
+              - integration/security/test_ssh.py::test_ssh_sshguard_iptables_configured
+              - integration/security/test_ssh.py::test_ssh_sshguard_iptables_backend_configured
+          - flavor: baremetal-sci_usidev
+            expected_users: nova,neutron,kvm-node-agent,openstack
+            deselect_tests:
+              - integration/core/test_services.py::test_metal_ipmievd_service_enabled
+              - integration/security/test_ssh.py::test_ssh_sshguard_iptables_configured
+              - integration/security/test_ssh.py::test_ssh_sshguard_iptables_backend_configured
+          - flavor: baremetal-sci_pxe
+            expected_users: nova,neutron,kvm-node-agent,openstack
+            deselect_tests:
+              - integration/core/test_services.py::test_metal_ipmievd_service_enabled
+              - integration/security/test_ssh.py::test_ssh_sshguard_iptables_configured
+              - integration/security/test_ssh.py::test_ssh_sshguard_iptables_backend_configured
+          # capi: no openstack users, ipmievd not disabled
+          - flavor: baremetal-capi
+            expected_users: ""
+            deselect_tests: []
+          # controlplane: no openstack users, ipmievd not disabled
+          - flavor: baremetal-controlplane_usi
+            expected_users: ""
+            deselect_tests: []
     defaults:
       run:
         shell: bash
@@ -90,12 +114,24 @@ jobs:
           if [ ! -e ".build/$CNAME.pxe.tar.gz" ] && [ -e ".build/$CNAME.cc.tar" ]; then
             gzip -c ".build/$CNAME.cc.tar" > ".build/$CNAME.pxe.tar.gz"
           fi
+          # Build per-flavor test args
+          test_extra_args=()
+          if [ -n "${{ matrix.expected_users }}" ]; then
+            test_extra_args+=(--test-args "--expected-users ${{ matrix.expected_users }}")
+          fi
+          # Add --deselect for each test that doesn't apply to this flavor
+          deselect_json='${{ toJSON(matrix.deselect_tests) }}'
+          if [ "$deselect_json" != "[]" ] && [ "$deselect_json" != "null" ]; then
+            while IFS= read -r test_id; do
+              test_extra_args+=(--test-args "--deselect $test_id")
+            done < <(echo "$deselect_json" | jq -r '.[]')
+          fi
           if [ -e ".build/$CNAME.raw" ]; then
-            ./test ".build/$CNAME.raw"
+            ./test "${test_extra_args[@]}" ".build/$CNAME.raw"
           elif [ -e ".build/$CNAME.pxe.tar.gz" ]; then
-            ./test ".build/$CNAME.pxe.tar.gz"
+            ./test "${test_extra_args[@]}" ".build/$CNAME.pxe.tar.gz"
           elif [ -e ".build/$CNAME.iso" ]; then
-            ./test ".build/$CNAME.iso"
+            ./test "${test_extra_args[@]}" ".build/$CNAME.iso"
           else
             echo "no raw, pxe or iso file found, QEMU test failed"
             exit 1
