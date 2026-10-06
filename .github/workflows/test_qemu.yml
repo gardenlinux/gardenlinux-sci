@@ -85,6 +85,11 @@ jobs:
               qemu-img convert -f vmdk -O raw ".build/$CNAME.vmdk" ".build/$CNAME.raw"
             fi
           fi
+          # cc.tar (USI/UKI format) contains boot.efi + root.squashfs; repack as
+          # pxe.tar.gz so the gardenlinux test framework handles it as a UKI PXE boot
+          if [ ! -e ".build/$CNAME.pxe.tar.gz" ] && [ -e ".build/$CNAME.cc.tar" ]; then
+            gzip -c ".build/$CNAME.cc.tar" > ".build/$CNAME.pxe.tar.gz"
+          fi
           if [ -e ".build/$CNAME.raw" ]; then
             ./test ".build/$CNAME.raw"
           elif [ -e ".build/$CNAME.pxe.tar.gz" ]; then
