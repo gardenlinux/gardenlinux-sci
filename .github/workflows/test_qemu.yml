@@ -14,6 +14,7 @@ jobs:
         flavor:
           - baremetal-sci_usi
           - baremetal-sci_usidev
+          - baremetal-sci_pxe
           - baremetal-capi
           - baremetal-controlplane_usi
     defaults:
