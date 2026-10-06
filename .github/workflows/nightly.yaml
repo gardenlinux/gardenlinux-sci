@@ -88,6 +88,8 @@ jobs:
           name: build-${{ matrix.flavor }}-amd64
       - name: Unpack build artifacts
         run: |
+          echo "=== Files in workdir before unpack ==="
+          ls -la
           mkdir ".build"
           if [ -f "$CNAME.tar.gz" ]; then
             tar -C .build -xzf $CNAME.tar.gz
