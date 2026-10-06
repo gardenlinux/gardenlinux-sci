@@ -32,10 +32,19 @@ jobs:
       # aws_oidc_session: ${{ secrets.AWS_OIDC_SESSION }}
       # secureboot_db_kms_arn: ${{ secrets.SECUREBOOT_DB_KMS_ARN }}
   test_qemu:
-    name: QEMU integration test baremetal-sci_usi (amd64)
+    name: QEMU integration test ${{ matrix.flavor }} (amd64)
     needs: [build]
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor:
+          - baremetal-sci_usi
+          - baremetal-sci_usidev
+          - baremetal-sci_pxe
+          - baremetal-capi
+          - baremetal-controlplane_usi
     defaults:
       run:
         shell: bash
@@ -58,7 +67,7 @@ jobs:
           path: |
             COMMIT
             VERSION
-          key: build-baremetal-sci_usi-amd64-${{ github.run_id }}
+          key: build-${{ matrix.flavor }}-amd64-${{ github.run_id }}
           fail-on-cache-miss: true
       - name: Download test distribution
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # pin@v6.1.0
@@ -72,11 +81,11 @@ jobs:
           path: cert/
       - name: Set CNAME
         run: |
-          echo "CNAME=baremetal-sci_usi-amd64-$(cat VERSION)-$(cut -c1-8 COMMIT)" | tee -a "$GITHUB_ENV"
+          echo "CNAME=${{ matrix.flavor }}-amd64-$(cat VERSION)-$(cut -c1-8 COMMIT)" | tee -a "$GITHUB_ENV"
       - name: Load flavor build artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # pin@v8.0.1
         with:
-          name: build-baremetal-sci_usi-amd64
+          name: build-${{ matrix.flavor }}-amd64
       - name: Unpack build artifacts
         run: |
           mkdir ".build"
