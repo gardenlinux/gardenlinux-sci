@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         flavor:
           - baremetal-sci_usi
