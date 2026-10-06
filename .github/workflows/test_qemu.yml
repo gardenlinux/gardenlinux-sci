@@ -14,25 +14,36 @@ jobs:
         include:
           # sci flavors: have openstack system users (nova, neutron, kvm-node-agent, openstack)
           # created by the sci feature; ipmievd is intentionally disabled by sci preset;
-          # nftables is installed so sshguard uses nftables backend (not iptables)
+          # nftables is installed so sshguard uses nftables backend (not iptables);
+          # sci/00-default.cfg and sci/10-console.cfg override metal defaults (no earlyprintk,
+          # no ttyS0,115200 baud rate) so related metal cmdline tests are deselected
           - flavor: baremetal-sci_usi
             expected_users: nova,neutron,kvm-node-agent,openstack
             deselect_tests:
               - integration/core/test_services.py::test_metal_ipmievd_service_enabled
               - integration/security/test_ssh.py::test_ssh_sshguard_iptables_configured
               - integration/security/test_ssh.py::test_ssh_sshguard_iptables_backend_configured
+              - integration/kernel/test_kernel_cmdline.py::test_metal_kernel_cmdline_default
+              - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal
+              - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal_bautrates
           - flavor: baremetal-sci_usidev
             expected_users: nova,neutron,kvm-node-agent,openstack
             deselect_tests:
               - integration/core/test_services.py::test_metal_ipmievd_service_enabled
               - integration/security/test_ssh.py::test_ssh_sshguard_iptables_configured
               - integration/security/test_ssh.py::test_ssh_sshguard_iptables_backend_configured
+              - integration/kernel/test_kernel_cmdline.py::test_metal_kernel_cmdline_default
+              - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal
+              - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal_bautrates
           - flavor: baremetal-sci_pxe
             expected_users: nova,neutron,kvm-node-agent,openstack
             deselect_tests:
               - integration/core/test_services.py::test_metal_ipmievd_service_enabled
               - integration/security/test_ssh.py::test_ssh_sshguard_iptables_configured
               - integration/security/test_ssh.py::test_ssh_sshguard_iptables_backend_configured
+              - integration/kernel/test_kernel_cmdline.py::test_metal_kernel_cmdline_default
+              - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal
+              - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal_bautrates
           # capi: no openstack users, ipmievd not disabled
           - flavor: baremetal-capi
             expected_users: ""
