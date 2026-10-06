@@ -120,10 +120,25 @@ jobs:
               qemu-img convert -f vmdk -O raw ".build/$CNAME.vmdk" ".build/$CNAME.raw"
             fi
           fi
-          # cc.tar (USI/UKI format) contains boot.efi + root.squashfs; repack as
-          # pxe.tar.gz so the gardenlinux test framework handles it as a UKI PXE boot
+          # cc.tar (USI/UKI format) contains boot.efi + vmlinuz + initrd + cmdline + root.squashfs.
+          # Repack as pxe.tar.gz for the gardenlinux test framework, but exclude boot.efi and uki
+          # so run_qemu.sh uses traditional vmlinuz/initrd/cmdline iPXE boot (is_uki=0).
+          # UKI boot via chain-loading boot.efi requires OVMF to enumerate a UEFI NIC boot entry,
+          # which fails with virtio-net-pci on x86_64 (no EFI PXE ROM). Traditional PXE via iPXE
+          # works with SeaBIOS and does not require UEFI. We also patch .requirements to set
+          # uefi=false so run_qemu.sh uses SeaBIOS instead of OVMF for the QEMU test.
           if [ ! -e ".build/$CNAME.pxe.tar.gz" ] && [ -e ".build/$CNAME.cc.tar" ]; then
-            gzip -c ".build/$CNAME.cc.tar" > ".build/$CNAME.pxe.tar.gz"
+            tmpdir_cc=$(mktemp -d)
+            tar -C "$tmpdir_cc" -xf ".build/$CNAME.cc.tar"
+            rm -f "$tmpdir_cc/boot.efi" "$tmpdir_cc/uki"
+            tar -C "$tmpdir_cc" -czf ".build/$CNAME.pxe.tar.gz" .
+            rm -rf "$tmpdir_cc"
+            # Patch .requirements: set uefi=false so SeaBIOS is used (OVMF cannot network-boot
+            # via virtio-net-pci without a UEFI NIC ROM on x86_64).
+            req_file=".build/$CNAME.requirements"
+            if [ -f "$req_file" ]; then
+              sed -i 's/^uefi=true/uefi=false/' "$req_file"
+            fi
           fi
           # Build per-flavor test args
           test_extra_args=()
