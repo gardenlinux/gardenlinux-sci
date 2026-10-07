@@ -24,10 +24,11 @@ runs:
     - name: Pull ORAS artifacts
       shell: bash
       run: |
-        LAYERS=$(oras manifest fetch "$REPO:$TAG" | jq -r '.layers[]')
-        UKI_SHA=$(echo $LAYERS | jq -r 'select(.mediaType=="application/io.gardenlinux.uki") | .digest')
+        UKI_SHA=$(oras manifest fetch "$REPO:$TAG" | jq -r '.layers[] | select(.mediaType=="application/io.gardenlinux.uki") | .digest')
+        echo "UKI digest: $UKI_SHA"
 
         oras blob fetch "$REPO@$UKI_SHA" -o "$RUNNER_TEMP/$TAG.uki"
+        echo "UKI size: $(stat -c%s "$RUNNER_TEMP/$TAG.uki") bytes"
 
     - name: Set up a raw disk image
       shell: bash
