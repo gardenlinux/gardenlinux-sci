@@ -29,6 +29,10 @@ jobs:
               - integration/kernel/test_kernel_cmdline.py::test_metal_kernel_cmdline_default
               - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal
               - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal_bautrates
+              # sci _usi does not remove 90-image-dissect.rules (upstream _usi does via file.exclude)
+              - integration/core/test_base.py::test_usi_no_udev_rules_image_dissect
+              # sssd (scibase) and cloud-hypervisor (vhost) set capabilities intentionally
+              - integration/security/test_capabilities.py::test_only_expected_capabilities_are_set
           - flavor: baremetal-sci_usidev
             use_chroot: true
             expected_users: nova,neutron,kvm-node-agent,openstack
@@ -39,6 +43,10 @@ jobs:
               - integration/kernel/test_kernel_cmdline.py::test_metal_kernel_cmdline_default
               - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal
               - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal_bautrates
+              # sci _usi does not remove 90-image-dissect.rules (upstream _usi does via file.exclude)
+              - integration/core/test_base.py::test_usi_no_udev_rules_image_dissect
+              # sssd (scibase) and cloud-hypervisor (vhost) set capabilities intentionally
+              - integration/security/test_capabilities.py::test_only_expected_capabilities_are_set
           - flavor: baremetal-sci_pxe
             use_chroot: false
             expected_users: nova,neutron,kvm-node-agent,openstack
@@ -59,7 +67,11 @@ jobs:
           - flavor: baremetal-controlplane_usi
             use_chroot: true
             expected_users: ""
-            deselect_tests: []
+            deselect_tests:
+              # sci _usi does not remove 90-image-dissect.rules (upstream _usi does via file.exclude)
+              - integration/core/test_base.py::test_usi_no_udev_rules_image_dissect
+              # sssd (scibase) sets capabilities intentionally
+              - integration/security/test_capabilities.py::test_only_expected_capabilities_are_set
     defaults:
       run:
         shell: bash
