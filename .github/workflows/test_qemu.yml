@@ -121,20 +121,25 @@ jobs:
             fi
           fi
           # cc.tar (USI/UKI format) contains boot.efi + vmlinuz + initrd + cmdline + root.squashfs.
-          # Repack as pxe.tar.gz for the gardenlinux test framework, but exclude boot.efi and uki
-          # so run_qemu.sh uses traditional vmlinuz/initrd/cmdline iPXE boot (is_uki=0).
-          # UKI boot via chain-loading boot.efi requires OVMF to enumerate a UEFI NIC boot entry,
-          # which fails with virtio-net-pci on x86_64 (no EFI PXE ROM). Traditional PXE via iPXE
-          # works with SeaBIOS and does not require UEFI. We also patch .requirements to set
-          # uefi=false so run_qemu.sh uses SeaBIOS instead of OVMF for the QEMU test.
+          # Repack as pxe.tar.gz for the gardenlinux test framework with three adjustments:
+          # 1. Remove boot.efi and uki so run_qemu.sh uses traditional vmlinuz/initrd/cmdline
+          #    iPXE boot (is_uki=0). UKI boot via chain-loading boot.efi requires OVMF to
+          #    enumerate a UEFI NIC boot entry, which fails with virtio-net-pci on x86_64.
+          # 2. Append live-boot parameters to cmdline. The _usi build cmdline comes from
+          #    /etc/kernel/cmdline and does not include the _pxe fragments (ip=dhcp gl.live=1
+          #    gl.ovl=/:tmpfs). Without these the gardenlinux live initrd cannot switch root.
+          # 3. Patch .requirements to set uefi=false so SeaBIOS (not OVMF) is used; SeaBIOS
+          #    iPXE can boot from network without a UEFI NIC ROM.
           if [ ! -e ".build/$CNAME.pxe.tar.gz" ] && [ -e ".build/$CNAME.cc.tar" ]; then
             tmpdir_cc=$(mktemp -d)
             tar -C "$tmpdir_cc" -xf ".build/$CNAME.cc.tar"
             rm -f "$tmpdir_cc/boot.efi" "$tmpdir_cc/uki"
+            # Append live-boot parameters required by gardenlinux live initrd
+            if [ -f "$tmpdir_cc/cmdline" ]; then
+              echo "$(cat "$tmpdir_cc/cmdline") ip=dhcp gl.live=1 gl.ovl=/:tmpfs" > "$tmpdir_cc/cmdline"
+            fi
             tar -C "$tmpdir_cc" -czf ".build/$CNAME.pxe.tar.gz" .
             rm -rf "$tmpdir_cc"
-            # Patch .requirements: set uefi=false so SeaBIOS is used (OVMF cannot network-boot
-            # via virtio-net-pci without a UEFI NIC ROM on x86_64).
             req_file=".build/$CNAME.requirements"
             if [ -f "$req_file" ]; then
               sed -i 's/^uefi=true/uefi=false/' "$req_file"
