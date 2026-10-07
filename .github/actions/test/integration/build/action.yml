@@ -24,7 +24,7 @@ runs:
     - name: Pull ORAS artifacts
       shell: bash
       run: |
-        UKI_SHA=$(oras manifest fetch "$REPO:$TAG" | jq -r '.layers[] | select(.mediaType=="application/io.gardenlinux.uki") | .digest')
+        UKI_SHA=$(oras manifest fetch --media-type 'application/vnd.oci.image.manifest.v1+json' "$REPO:$TAG" | jq -r '.layers[] | select(.mediaType=="application/io.gardenlinux.uki") | .digest')
         echo "UKI digest: $UKI_SHA"
 
         oras blob fetch "$REPO@$UKI_SHA" -o "$RUNNER_TEMP/$TAG.uki"
