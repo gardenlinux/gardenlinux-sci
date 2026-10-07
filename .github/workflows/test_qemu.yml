@@ -16,8 +16,11 @@ jobs:
           # created by the sci feature; ipmievd is intentionally disabled by sci preset;
           # nftables is installed so sshguard uses nftables backend (not iptables);
           # sci/00-default.cfg and sci/10-console.cfg override metal defaults (no earlyprintk,
-          # no ttyS0,115200 baud rate) so related metal cmdline tests are deselected
+          # no ttyS0,115200 baud rate) so related metal cmdline tests are deselected.
+          # _usi flavors produce cc.tar (UKI/EROFS) whose initrd lacks gardenlinux-live;
+          # they cannot be live-booted in QEMU. Use the .tar rootfs for chroot testing instead.
           - flavor: baremetal-sci_usi
+            use_chroot: true
             expected_users: nova,neutron,kvm-node-agent,openstack
             deselect_tests:
               - integration/core/test_services.py::test_metal_ipmievd_service_enabled
@@ -27,6 +30,7 @@ jobs:
               - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal
               - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal_bautrates
           - flavor: baremetal-sci_usidev
+            use_chroot: true
             expected_users: nova,neutron,kvm-node-agent,openstack
             deselect_tests:
               - integration/core/test_services.py::test_metal_ipmievd_service_enabled
@@ -36,6 +40,7 @@ jobs:
               - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal
               - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal_bautrates
           - flavor: baremetal-sci_pxe
+            use_chroot: false
             expected_users: nova,neutron,kvm-node-agent,openstack
             deselect_tests:
               - integration/core/test_services.py::test_metal_ipmievd_service_enabled
@@ -46,10 +51,13 @@ jobs:
               - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal_bautrates
           # capi: no openstack users, ipmievd not disabled
           - flavor: baremetal-capi
+            use_chroot: false
             expected_users: ""
             deselect_tests: []
-          # controlplane: no openstack users, ipmievd not disabled
+          # controlplane: no openstack users, ipmievd not disabled.
+          # controlplane_usi produces cc.tar; use chroot test via .tar rootfs.
           - flavor: baremetal-controlplane_usi
+            use_chroot: true
             expected_users: ""
             deselect_tests: []
     defaults:
@@ -61,6 +69,7 @@ jobs:
       actions: write
     steps:
       - name: Install QEMU
+        if: ${{ !matrix.use_chroot }}
         run: |
           sudo apt-get update
           sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends qemu-utils qemu-system-x86 qemu-system-arm swtpm socat libxml2-utils
@@ -102,49 +111,13 @@ jobs:
           fi
           tree .build
       - name: rw for KVM
+        if: ${{ !matrix.use_chroot }}
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Execute tests
         run: |
-          if [ ! -e ".build/$CNAME.raw" ]; then
-            if [ -e ".build/$CNAME.ova" ]; then
-              tar xvf ".build/$CNAME.ova" -C .build
-            fi
-            if [ -e ".build/$CNAME.vhd" ]; then
-              qemu-img convert -f vpc -O raw ".build/$CNAME.vhd" ".build/$CNAME.raw"
-            elif [ -e ".build/$CNAME.qcow2" ]; then
-              qemu-img convert -f qcow2 -O raw ".build/$CNAME.qcow2" ".build/$CNAME.raw"
-            elif [ -e ".build/$CNAME.vmdk" ]; then
-              qemu-img convert -f vmdk -O raw ".build/$CNAME.vmdk" ".build/$CNAME.raw"
-            fi
-          fi
-          # cc.tar (USI/UKI format) contains boot.efi + vmlinuz + initrd + cmdline + root.squashfs.
-          # Repack as pxe.tar.gz for the gardenlinux test framework with three adjustments:
-          # 1. Remove boot.efi and uki so run_qemu.sh uses traditional vmlinuz/initrd/cmdline
-          #    iPXE boot (is_uki=0). UKI boot via chain-loading boot.efi requires OVMF to
-          #    enumerate a UEFI NIC boot entry, which fails with virtio-net-pci on x86_64.
-          # 2. Append live-boot parameters to cmdline. The _usi build cmdline comes from
-          #    /etc/kernel/cmdline and does not include the _pxe fragments (ip=dhcp gl.live=1
-          #    gl.ovl=/:tmpfs). Without these the gardenlinux live initrd cannot switch root.
-          # 3. Patch .requirements to set uefi=false so SeaBIOS (not OVMF) is used; SeaBIOS
-          #    iPXE can boot from network without a UEFI NIC ROM.
-          if [ ! -e ".build/$CNAME.pxe.tar.gz" ] && [ -e ".build/$CNAME.cc.tar" ]; then
-            tmpdir_cc=$(mktemp -d)
-            tar -C "$tmpdir_cc" -xf ".build/$CNAME.cc.tar"
-            rm -f "$tmpdir_cc/boot.efi" "$tmpdir_cc/uki"
-            # Append live-boot parameters required by gardenlinux live initrd
-            if [ -f "$tmpdir_cc/cmdline" ]; then
-              echo "$(cat "$tmpdir_cc/cmdline") ip=dhcp gl.live=1 gl.ovl=/:tmpfs" > "$tmpdir_cc/cmdline"
-            fi
-            tar -C "$tmpdir_cc" -czf ".build/$CNAME.pxe.tar.gz" .
-            rm -rf "$tmpdir_cc"
-            req_file=".build/$CNAME.requirements"
-            if [ -f "$req_file" ]; then
-              sed -i 's/^uefi=true/uefi=false/' "$req_file"
-            fi
-          fi
           # Build per-flavor test args
           test_extra_args=()
           if [ -n "${{ matrix.expected_users }}" ]; then
@@ -157,7 +130,11 @@ jobs:
               test_extra_args+=(--test-args "--deselect $test_id")
             done < <(echo "$deselect_json" | jq -r '.[]')
           fi
-          if [ -e ".build/$CNAME.raw" ]; then
+          if [ "${{ matrix.use_chroot }}" = "true" ]; then
+            # _usi flavors: initrd embeds EROFS (not squashfs) and lacks gardenlinux-live,
+            # so QEMU live-boot is not possible. Use the .tar rootfs for chroot testing instead.
+            ./test "${test_extra_args[@]}" ".build/$CNAME.tar"
+          elif [ -e ".build/$CNAME.raw" ]; then
             ./test "${test_extra_args[@]}" ".build/$CNAME.raw"
           elif [ -e ".build/$CNAME.pxe.tar.gz" ]; then
             ./test "${test_extra_args[@]}" ".build/$CNAME.pxe.tar.gz"
@@ -172,6 +149,8 @@ jobs:
         run: |
           cp tests/log/qemu.test.log .build/${CNAME}.qemu.test.log || true
           cp tests/log/qemu.test.xml .build/${CNAME}.qemu.test.xml || true
+          cp tests/log/chroot.test.log .build/${CNAME}.chroot.test.log || true
+          cp tests/log/chroot.test.xml .build/${CNAME}.chroot.test.xml || true
       - name: Upload test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pin@v7.0.1
         if: always()
@@ -181,3 +160,5 @@ jobs:
           path: |
             .build/${{ env.CNAME }}.qemu.test.log
             .build/${{ env.CNAME }}.qemu.test.xml
+            .build/${{ env.CNAME }}.chroot.test.log
+            .build/${{ env.CNAME }}.chroot.test.xml
