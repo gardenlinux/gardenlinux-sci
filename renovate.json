@@ -3,6 +3,9 @@
   "extends": [
     "config:best-practices"
   ],
+  "reviewers": [
+    "team:sap-cloud-infrastructure-maintainers"
+  ],
   "baseBranchPatterns": [
     "$default",
     "/^rel-\\d+-dev$/"
