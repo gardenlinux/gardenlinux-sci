@@ -82,9 +82,10 @@ runs:
         echo "Original cmdline: $CURRENT_CMDLINE"
 
         # Append ignition boot parameters and serial console for the hypervisor test environment.
-        # console=ttyS0 is required to capture kernel output via the libvirt serial device;
-        # the UKI's default cmdline only has console=tty0 (VGA).
-        NEW_CMDLINE="$CURRENT_CMDLINE console=ttyS0 ignition.firstboot=1 ignition.platform.id=qemu"
+        # earlycon=uart8250,io,0x3f8: very early serial output before the driver initialises
+        # console=ttyS0: kernel serial console (post-driver)
+        # earlyprintk=serial,ttyS0: additional early printk path
+        NEW_CMDLINE="$CURRENT_CMDLINE earlycon=uart8250,io,0x3f8 earlyprintk=serial,ttyS0 console=ttyS0 ignition.firstboot=1 ignition.platform.id=qemu"
         echo "Patched cmdline:  $NEW_CMDLINE"
 
         printf '%s' "$NEW_CMDLINE" > "$RUNNER_TEMP/cmdline-patched.bin"
