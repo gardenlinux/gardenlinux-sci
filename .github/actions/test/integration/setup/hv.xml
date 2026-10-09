@@ -2,9 +2,10 @@
     <name>HV_NAME_GOES_HERE</name>
     <memory unit='GiB'>6</memory>
     <vcpu>4</vcpu>
-    <os firmware='efi'>
+    <os>
         <type arch='x86_64'>hvm</type>
         <loader readonly='yes' type='pflash'>/usr/share/OVMF/OVMF_CODE_4M.fd</loader>
+        <nvram>/var/lib/libvirt/qemu/nvram/HV_NAME_GOES_HERE_VARS.fd</nvram>
     </os>
     <features>
         <acpi />
@@ -15,7 +16,6 @@
             <driver name='qemu' type='qcow2' />
             <source file='/var/lib/libvirt/images/HV_NAME_GOES_HERE.qcow2' />
             <target dev='vda' bus='virtio' />
-            <boot order='1' />
         </disk>
         <interface type='network'>
             <mac address='MAC_GOES_HERE' />
