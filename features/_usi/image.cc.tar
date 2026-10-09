@@ -92,11 +92,11 @@ esp_tar="$(mktemp)"
 dest_dir="$(mktemp -d)"
 
 mv "$rootfs/uki" "$dest_dir"/uki
-cp "$dest_dir/uki" "$dest_dir/boot.efi"
+ln "$dest_dir/uki" "$dest_dir/boot.efi"
 mv "$rootfs/initrd" "$dest_dir"/initrd
 cp "$rootfs/boot/$kernel" "$dest_dir"/vmlinuz
 cp "$erofs" "$dest_dir"/squashfs
-cp "$dest_dir/squashfs" "$dest_dir/root.squashfs"
+ln "$dest_dir/squashfs" "$dest_dir/root.squashfs"
 echo "$cmdline" > "$dest_dir/cmdline"
 
 rm "$erofs"
