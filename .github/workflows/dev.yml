@@ -34,7 +34,7 @@ jobs:
         id: version
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "VERSION=today" >> $GITHUB_OUTPUT
+            echo "VERSION=now" >> $GITHUB_OUTPUT
           else
             echo "VERSION=$(cat VERSION)" >> $GITHUB_OUTPUT
           fi

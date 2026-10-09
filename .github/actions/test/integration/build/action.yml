@@ -37,7 +37,12 @@ runs:
         echo "UKI digest: $UKI_SHA"
 
         oras blob fetch "$REPO@$UKI_SHA" -o "$RUNNER_TEMP/$TAG.uki"
-        echo "UKI size: $(stat -c%s "$RUNNER_TEMP/$TAG.uki") bytes"
+        UKI_SIZE=$(stat -c%s "$RUNNER_TEMP/$TAG.uki")
+        echo "UKI size: $UKI_SIZE bytes"
+        if [ "$UKI_SIZE" -eq 0 ]; then
+          echo "::error::UKI blob is empty (digest: $UKI_SHA). The OCI artifact was built with an empty UKI — check the upstream build for version=today package issues."
+          exit 1
+        fi
 
     - name: Set up a raw disk image
       shell: bash
