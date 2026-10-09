@@ -33,7 +33,5 @@
     <qemu:commandline>
         <qemu:arg value='-fw_cfg' />
         <qemu:arg value='name=opt/com.coreos/config,file=/var/lib/libvirt/images/HV_NAME_GOES_HERE.ign' />
-        <qemu:arg value='-global'/>
-        <qemu:arg value='ide-hd.bootindex=0'/>
     </qemu:commandline>
 </domain>

@@ -18,6 +18,25 @@ runs:
         sudo cp "/opt/${TAG}-hv1.ign" /var/lib/libvirt/images/HV1.ign
         sudo cp "/opt/${TAG}-hv2.ign" /var/lib/libvirt/images/HV2.ign
 
+    - name: Create OVMF VARS with boot entry for HV disk
+      shell: bash
+      run: |
+        sudo mkdir -p /var/lib/libvirt/qemu/nvram
+
+        # Inject a File(\EFI\BOOT\BOOTX64.EFI) boot entry into VARS so OVMF
+        # finds it before the device-level Sata() entry created by bootindex=1.
+        # OVMF tries BootOrder entries in order; our entry becomes Boot0000 and
+        # goes first, so it finds the UKI at \EFI\BOOT\BOOTX64.EFI on the ESP.
+        virt-fw-vars \
+          --input /usr/share/OVMF/OVMF_VARS_4M.fd \
+          --output /tmp/VARS-hv.fd \
+          --append-boot-filepath '\EFI\BOOT\BOOTX64.EFI'
+        echo "VARS created successfully with boot entry:"
+        virt-fw-vars --input /tmp/VARS-hv.fd --print-bootvars
+
+        sudo cp /tmp/VARS-hv.fd /var/lib/libvirt/qemu/nvram/HV1_VARS.fd
+        sudo cp /tmp/VARS-hv.fd /var/lib/libvirt/qemu/nvram/HV2_VARS.fd
+
     - name: Create HyperVisor 1
       shell: bash
       run: |
@@ -25,8 +44,6 @@ runs:
         sed -i "s|HV_NAME_GOES_HERE|HV1|g" ./.github/actions/test/integration/setup/hv1.xml
         sed -i "s|MAC_GOES_HERE|52:54:00:12:34:56|g" ./.github/actions/test/integration/setup/hv1.xml
         sudo cp "/opt/${TAG}.qcow2" /var/lib/libvirt/images/HV1.qcow2
-        sudo mkdir -p /var/lib/libvirt/qemu/nvram
-        sudo cp /usr/share/OVMF/OVMF_VARS_4M.fd /var/lib/libvirt/qemu/nvram/HV1_VARS.fd
 
         sudo virsh define ./.github/actions/test/integration/setup/hv1.xml
         sudo virsh start HV1
@@ -38,7 +55,6 @@ runs:
         sed -i "s|HV_NAME_GOES_HERE|HV2|g" ./.github/actions/test/integration/setup/hv2.xml
         sed -i "s|MAC_GOES_HERE|52:54:00:65:43:21|g" ./.github/actions/test/integration/setup/hv2.xml
         sudo cp "/opt/${TAG}.qcow2" /var/lib/libvirt/images/HV2.qcow2
-        sudo cp /usr/share/OVMF/OVMF_VARS_4M.fd /var/lib/libvirt/qemu/nvram/HV2_VARS.fd
 
         sudo virsh define ./.github/actions/test/integration/setup/hv2.xml
         sudo virsh start HV2
