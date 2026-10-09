@@ -52,6 +52,33 @@ storage:
         OCI_REPO=ghcr.io/gardenlinux/gardenlinux-sci
         # point to a custom tag to download for the persist step
         OCI_TAG=TAG_GOES_HERE
+  # Hook called by persist (chrooted into the new sysroot) after the UKI is
+  # downloaded and before systemd-repart partitions the disk.
+  # Patches the freshly-downloaded UKI so the second boot also gets serial
+  # console output and ignition runs again (for SSH authorized_keys etc.).
+  - path: /opt/persist/network_up.sh
+    mode: 0755
+    contents:
+      inline: |
+        #!/usr/bin/env bash
+        set -Eeuo pipefail
+
+        # Patch the downloaded UKI's .cmdline section so the second boot
+        # also has serial console output and ignition can configure SSH.
+        UKI=$(ls /efi/EFI/Linux/*.efi 2>/dev/null | head -1 || true)
+        if [ -n "$UKI" ]; then
+            objcopy --dump-section .cmdline=/tmp/cmdline.bin "$UKI"
+            CURRENT=$(tr -d '\0\n' < /tmp/cmdline.bin)
+            printf '%s' "$CURRENT console=ttyS0 ignition.platform.id=qemu" \
+                > /tmp/cmdline-new.bin
+            objcopy --update-section .cmdline=/tmp/cmdline-new.bin \
+                "$UKI" "${UKI}.patched"
+            mv "${UKI}.patched" "$UKI"
+            echo "Patched second-boot UKI cmdline: $CURRENT console=ttyS0 ignition.platform.id=qemu"
+        fi
+
+        # Ensure the SSH daemon is enabled for the second boot.
+        systemctl enable ssh.service || true
   # Enable unlimited core dumps for all systemd services
   - path: /etc/systemd/system.conf.d/10-core.conf
     mode: 0644
@@ -86,3 +113,5 @@ systemd:
       mask: true
     - name: libvirtd-tcp.socket
       mask: true
+    - name: ssh.service
+      enabled: true

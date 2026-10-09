@@ -64,7 +64,7 @@ runs:
         KEY=/opt/ssh_host_ed25519_key
         SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
         USER="root"
-        MAX_ITER=60
+        MAX_ITER=90
 
         setup_hv() {
           local IP="$1"
