@@ -81,8 +81,10 @@ runs:
         CURRENT_CMDLINE=$(tr -d '\0\n' < "$RUNNER_TEMP/cmdline.bin")
         echo "Original cmdline: $CURRENT_CMDLINE"
 
-        # Append ignition boot parameters needed for the hypervisor test environment
-        NEW_CMDLINE="$CURRENT_CMDLINE ignition.firstboot=1 ignition.platform.id=qemu"
+        # Append ignition boot parameters and serial console for the hypervisor test environment.
+        # console=ttyS0 is required to capture kernel output via the libvirt serial device;
+        # the UKI's default cmdline only has console=tty0 (VGA).
+        NEW_CMDLINE="$CURRENT_CMDLINE console=ttyS0 ignition.firstboot=1 ignition.platform.id=qemu"
         echo "Patched cmdline:  $NEW_CMDLINE"
 
         printf '%s' "$NEW_CMDLINE" > "$RUNNER_TEMP/cmdline-patched.bin"
