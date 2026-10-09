@@ -31,8 +31,7 @@ runs:
           --input /usr/share/OVMF/OVMF_VARS_4M.fd \
           --output /tmp/VARS-hv.fd \
           --append-boot-filepath '\EFI\BOOT\BOOTX64.EFI'
-        echo "VARS created successfully with boot entry:"
-        virt-fw-vars --input /tmp/VARS-hv.fd --print-bootvars
+        echo "VARS created successfully with boot entry"
 
         sudo cp /tmp/VARS-hv.fd /var/lib/libvirt/qemu/nvram/HV1_VARS.fd
         sudo cp /tmp/VARS-hv.fd /var/lib/libvirt/qemu/nvram/HV2_VARS.fd
