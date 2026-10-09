@@ -25,10 +25,8 @@ runs:
         sed -i "s|HV_NAME_GOES_HERE|HV1|g" ./.github/actions/test/integration/setup/hv1.xml
         sed -i "s|MAC_GOES_HERE|52:54:00:12:34:56|g" ./.github/actions/test/integration/setup/hv1.xml
         sudo cp "/opt/${TAG}.qcow2" /var/lib/libvirt/images/HV1.qcow2
-        # Create a blank OVMF VARS file so OVMF finds no pre-existing boot entries
-        # and falls back to scanning block devices for \EFI\BOOT\BOOTX64.EFI
         sudo mkdir -p /var/lib/libvirt/qemu/nvram
-        sudo dd if=/dev/zero bs=1M count=4 of=/var/lib/libvirt/qemu/nvram/HV1_VARS.fd
+        sudo cp /usr/share/OVMF/OVMF_VARS_4M.fd /var/lib/libvirt/qemu/nvram/HV1_VARS.fd
 
         sudo virsh define ./.github/actions/test/integration/setup/hv1.xml
         sudo virsh start HV1
@@ -40,7 +38,7 @@ runs:
         sed -i "s|HV_NAME_GOES_HERE|HV2|g" ./.github/actions/test/integration/setup/hv2.xml
         sed -i "s|MAC_GOES_HERE|52:54:00:65:43:21|g" ./.github/actions/test/integration/setup/hv2.xml
         sudo cp "/opt/${TAG}.qcow2" /var/lib/libvirt/images/HV2.qcow2
-        sudo dd if=/dev/zero bs=1M count=4 of=/var/lib/libvirt/qemu/nvram/HV2_VARS.fd
+        sudo cp /usr/share/OVMF/OVMF_VARS_4M.fd /var/lib/libvirt/qemu/nvram/HV2_VARS.fd
 
         sudo virsh define ./.github/actions/test/integration/setup/hv2.xml
         sudo virsh start HV2
