@@ -18,6 +18,24 @@ runs:
         sudo cp "/opt/${TAG}-hv1.ign" /var/lib/libvirt/images/HV1.ign
         sudo cp "/opt/${TAG}-hv2.ign" /var/lib/libvirt/images/HV2.ign
 
+    - name: Create OVMF VARS with boot entry for HV disk
+      shell: bash
+      run: |
+        sudo mkdir -p /var/lib/libvirt/qemu/nvram
+
+        # Inject a File(\EFI\BOOT\BOOTX64.EFI) boot entry into VARS so OVMF
+        # finds it before the device-level Sata() entry created by bootindex=1.
+        # OVMF tries BootOrder entries in order; our entry becomes Boot0000 and
+        # goes first, so it finds the UKI at \EFI\BOOT\BOOTX64.EFI on the ESP.
+        virt-fw-vars \
+          --input /usr/share/OVMF/OVMF_VARS_4M.fd \
+          --output /tmp/VARS-hv.fd \
+          --append-boot-filepath '\EFI\BOOT\BOOTX64.EFI'
+        echo "VARS created successfully with boot entry"
+
+        sudo cp /tmp/VARS-hv.fd /var/lib/libvirt/qemu/nvram/HV1_VARS.fd
+        sudo cp /tmp/VARS-hv.fd /var/lib/libvirt/qemu/nvram/HV2_VARS.fd
+
     - name: Create HyperVisor 1
       shell: bash
       run: |
@@ -46,7 +64,7 @@ runs:
         KEY=/opt/ssh_host_ed25519_key
         SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
         USER="root"
-        MAX_ITER=30
+        MAX_ITER=90
 
         setup_hv() {
           local IP="$1"

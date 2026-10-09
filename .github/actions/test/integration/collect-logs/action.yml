@@ -13,6 +13,10 @@ runs:
         sudo cp /var/log/libvirt/qemu/HV1.log "libvirt-HV1.log" || true
         sudo cp /var/log/libvirt/qemu/HV2.log "libvirt-HV2.log" || true
 
+        # Serial console output (OVMF + kernel boot messages)
+        sudo cp /var/log/HV1.log "serial-HV1.log" || true
+        sudo cp /var/log/HV2.log "serial-HV2.log" || true
+
     - name: Obtain logs from hypervisors
       shell: bash
       run: |

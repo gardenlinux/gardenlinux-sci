@@ -24,17 +24,25 @@ runs:
     - name: Pull ORAS artifacts
       shell: bash
       run: |
-        LAYERS=$(oras manifest fetch "$REPO:$TAG" | jq -r '.layers[]')
-        UKI_SHA=$(echo $LAYERS | jq -r 'select(.mediaType=="application/io.gardenlinux.uki") | .digest')
-        TAR_SHA=$(echo "$LAYERS" | jq -r 'select(.mediaType=="application/io.gardenlinux.image.archive.format.tar")' | jq -rs 'sort_by(.size) | .[0].digest')
+        # oras manifest fetch in v1.2.2 has content negotiation issues with GHCR.
+        # Use curl with explicit Accept header to fetch the image manifest reliably.
+        ANON_TOKEN=$(curl -s "https://ghcr.io/token?service=ghcr.io&scope=repository:gardenlinux/gardenlinux-sci:pull" | jq -r '.token')
+        MANIFEST=$(curl -s \
+          -H "Authorization: Bearer $ANON_TOKEN" \
+          -H "Accept: application/vnd.oci.image.manifest.v1+json" \
+          "https://ghcr.io/v2/gardenlinux/gardenlinux-sci/manifests/$TAG")
+        echo "Manifest layers:"
+        echo "$MANIFEST" | jq -r '.layers[] | .mediaType' | head -5
+        UKI_SHA=$(echo "$MANIFEST" | jq -r '.layers[] | select(.mediaType=="application/io.gardenlinux.uki") | .digest')
+        echo "UKI digest: $UKI_SHA"
 
         oras blob fetch "$REPO@$UKI_SHA" -o "$RUNNER_TEMP/$TAG.uki"
-        oras blob fetch "$REPO@$TAR_SHA" -o "$RUNNER_TEMP/$TAG.tar" # wasteful, we only systemd-boot
-
-    - name: Extract systemd-boot
-      shell: bash
-      run: |
-        tar -xf "$RUNNER_TEMP/$TAG.tar" --no-same-owner --strip-components=5 -C "$RUNNER_TEMP" usr/lib/systemd/boot/efi/systemd-bootx64.efi
+        UKI_SIZE=$(stat -c%s "$RUNNER_TEMP/$TAG.uki")
+        echo "UKI size: $UKI_SIZE bytes"
+        if [ "$UKI_SIZE" -eq 0 ]; then
+          echo "::error::UKI blob is empty (digest: $UKI_SHA). The OCI artifact was built with an empty UKI — check the upstream build for version=today package issues."
+          exit 1
+        fi
 
     - name: Set up a raw disk image
       shell: bash
@@ -61,28 +69,43 @@ runs:
         sudo mkfs.vfat -F32 "$ESP_PART"
         sudo mkfs.ext4 "$VAR_PART" -L VAR
 
+    - name: Patch UKI cmdline with ignition parameters
+      shell: bash
+      run: |
+        UKI="$RUNNER_TEMP/$TAG.uki"
+        PATCHED_UKI="$RUNNER_TEMP/${TAG}-patched.uki"
+
+        # Extract the embedded cmdline from the UKI's .cmdline PE section
+        objcopy --dump-section .cmdline="$RUNNER_TEMP/cmdline.bin" "$UKI"
+        # The .cmdline section may or may not be NUL-terminated; strip any trailing NUL/newline
+        CURRENT_CMDLINE=$(tr -d '\0\n' < "$RUNNER_TEMP/cmdline.bin")
+        echo "Original cmdline: $CURRENT_CMDLINE"
+
+        # Append ignition boot parameters and serial console for the hypervisor test environment.
+        # earlycon=uart8250,io,0x3f8: very early serial output before the driver initialises
+        # console=ttyS0: kernel serial console (post-driver)
+        # earlyprintk=serial,ttyS0: additional early printk path
+        NEW_CMDLINE="$CURRENT_CMDLINE earlycon=uart8250,io,0x3f8 earlyprintk=serial,ttyS0 console=ttyS0 ignition.firstboot=1 ignition.platform.id=qemu"
+        echo "Patched cmdline:  $NEW_CMDLINE"
+
+        printf '%s' "$NEW_CMDLINE" > "$RUNNER_TEMP/cmdline-patched.bin"
+
+        # Reinsert the patched cmdline section into the UKI
+        objcopy --update-section .cmdline="$RUNNER_TEMP/cmdline-patched.bin" "$UKI" "$PATCHED_UKI"
+        mv "$PATCHED_UKI" "$UKI"
+
     - name: Populate the ESP partition
       shell: bash
       run: |
         mkdir -p "$RUNNER_TEMP/esp"
         sudo mount "$ESP_PART" "$RUNNER_TEMP/esp"
 
+        # Place the UKI directly as BOOTX64.EFI so OVMF loads it as an EFI binary.
+        # Systemd-boot's 'linux' entry type cannot load a UKI (it expects a bzImage);
+        # placing the UKI in EFI/Linux/ lets systemd-boot auto-discover it as a Type 2
+        # entry, but OVMF can boot the UKI directly without a bootloader.
         sudo mkdir -p "$RUNNER_TEMP/esp/EFI/BOOT"
-        sudo cp "$RUNNER_TEMP/systemd-bootx64.efi" "$RUNNER_TEMP/esp/EFI/BOOT/BOOTX64.EFI"
-        sudo cp "$RUNNER_TEMP/$TAG.uki" "$RUNNER_TEMP/esp/EFI/BOOT/gardenlinux.efi"
-
-        sudo mkdir -p "$RUNNER_TEMP/esp/loader/entries"
-
-        cat <<EOF | sudo tee "$RUNNER_TEMP/esp/loader/loader.conf" > /dev/null
-        default      gardenlinux
-        timeout      3
-        console-mode max
-        EOF
-        cat <<EOF | sudo tee "$RUNNER_TEMP/esp/loader/entries/gardenlinux.conf" > /dev/null
-        title   Garden Linux (UKI)
-        linux   /EFI/BOOT/gardenlinux.efi
-        options systemd.gpt_auto=0 audit=0 console=ttyS0 ignition.firstboot=1 ignition.platform.id=qemu
-        EOF
+        sudo cp "$RUNNER_TEMP/$TAG.uki" "$RUNNER_TEMP/esp/EFI/BOOT/BOOTX64.EFI"
 
         sudo umount "$RUNNER_TEMP/esp"
         sudo losetup -d "$LOOPDEV"

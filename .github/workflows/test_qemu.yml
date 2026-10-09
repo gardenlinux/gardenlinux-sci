@@ -1,0 +1,176 @@
+name: test_qemu
+
+on:
+  workflow_call:
+
+jobs:
+  test_qemu:
+    name: QEMU integration test ${{ matrix.flavor }} (amd64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # sci flavors: have openstack system users (nova, neutron, kvm-node-agent, openstack)
+          # created by the sci feature; ipmievd is intentionally disabled by sci preset;
+          # nftables is installed so sshguard uses nftables backend (not iptables);
+          # sci/00-default.cfg and sci/10-console.cfg override metal defaults (no earlyprintk,
+          # no ttyS0,115200 baud rate) so related metal cmdline tests are deselected.
+          # _usi flavors produce cc.tar (UKI/EROFS) whose initrd lacks gardenlinux-live;
+          # they cannot be live-booted in QEMU. Use the .tar rootfs for chroot testing instead.
+          - flavor: baremetal-sci_usi
+            use_chroot: true
+            expected_users: nova,neutron,kvm-node-agent,openstack
+            deselect_tests:
+              - integration/core/test_services.py::test_metal_ipmievd_service_enabled
+              - integration/security/test_ssh.py::test_ssh_sshguard_iptables_configured
+              - integration/security/test_ssh.py::test_ssh_sshguard_iptables_backend_configured
+              - integration/kernel/test_kernel_cmdline.py::test_metal_kernel_cmdline_default
+              - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal
+              - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal_bautrates
+              # sci _usi does not remove 90-image-dissect.rules (upstream _usi does via file.exclude)
+              - integration/core/test_base.py::test_usi_no_udev_rules_image_dissect
+              # sssd (scibase) and cloud-hypervisor (vhost) set capabilities intentionally
+              - integration/security/test_capabilities.py::test_only_expected_capabilities_are_set
+          - flavor: baremetal-sci_usidev
+            use_chroot: true
+            expected_users: nova,neutron,kvm-node-agent,openstack
+            deselect_tests:
+              - integration/core/test_services.py::test_metal_ipmievd_service_enabled
+              - integration/security/test_ssh.py::test_ssh_sshguard_iptables_configured
+              - integration/security/test_ssh.py::test_ssh_sshguard_iptables_backend_configured
+              - integration/kernel/test_kernel_cmdline.py::test_metal_kernel_cmdline_default
+              - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal
+              - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal_bautrates
+              # sci _usi does not remove 90-image-dissect.rules (upstream _usi does via file.exclude)
+              - integration/core/test_base.py::test_usi_no_udev_rules_image_dissect
+              # sssd (scibase) and cloud-hypervisor (vhost) set capabilities intentionally
+              - integration/security/test_capabilities.py::test_only_expected_capabilities_are_set
+          - flavor: baremetal-sci_pxe
+            use_chroot: false
+            expected_users: nova,neutron,kvm-node-agent,openstack
+            deselect_tests:
+              - integration/core/test_services.py::test_metal_ipmievd_service_enabled
+              - integration/security/test_ssh.py::test_ssh_sshguard_iptables_configured
+              - integration/security/test_ssh.py::test_ssh_sshguard_iptables_backend_configured
+              - integration/kernel/test_kernel_cmdline.py::test_metal_kernel_cmdline_default
+              - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal
+              - integration/kernel/test_kernel_cmdline.py::test_console_configuration_in_cmdline_metal_bautrates
+          # capi: no openstack users, ipmievd not disabled
+          - flavor: baremetal-capi
+            use_chroot: false
+            expected_users: ""
+            deselect_tests: []
+          # controlplane: no openstack users, ipmievd not disabled.
+          # controlplane_usi produces cc.tar; use chroot test via .tar rootfs.
+          - flavor: baremetal-controlplane_usi
+            use_chroot: true
+            expected_users: ""
+            deselect_tests:
+              # sci _usi does not remove 90-image-dissect.rules (upstream _usi does via file.exclude)
+              - integration/core/test_base.py::test_usi_no_udev_rules_image_dissect
+              # sssd (scibase) sets capabilities intentionally
+              - integration/security/test_capabilities.py::test_only_expected_capabilities_are_set
+    defaults:
+      run:
+        shell: bash
+    env:
+      CNAME: ""
+    permissions:
+      actions: write
+    steps:
+      - name: Install QEMU
+        if: ${{ !matrix.use_chroot }}
+        run: |
+          sudo apt-get update
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends qemu-utils qemu-system-x86 qemu-system-arm swtpm socat libxml2-utils
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: true
+      - name: Download test distribution
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # pin@v6.1.0
+        with:
+          path: tests/.build
+          key: test-distribution-${{ github.run_id }}
+      - name: Load certs artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # pin@v8.0.1
+        with:
+          name: certs
+          path: cert/
+      - name: Load flavor version data
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # pin@v8.0.1
+        with:
+          name: flavor-version-data
+      - name: Set CNAME
+        run: |
+          VERSION=$(jq -r '.version' flavor_version_data.json)
+          COMMIT=$(jq -r '.commit_id' flavor_version_data.json | cut -c1-8)
+          echo "CNAME=${{ matrix.flavor }}-amd64-${VERSION}-${COMMIT}" | tee -a "$GITHUB_ENV"
+      - name: Load flavor build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # pin@v8.0.1
+        with:
+          name: build-${{ matrix.flavor }}-amd64
+      - name: Unpack build artifacts
+        run: |
+          mkdir ".build"
+          if [ -f "$CNAME.tar.gz" ]; then
+            tar -C .build -xzf $CNAME.tar.gz
+            rm "$CNAME.tar.gz"
+          else
+            mv $CNAME.* .build/
+          fi
+          tree .build
+      - name: rw for KVM
+        if: ${{ !matrix.use_chroot }}
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Execute tests
+        run: |
+          # Build per-flavor test args
+          test_extra_args=()
+          if [ -n "${{ matrix.expected_users }}" ]; then
+            test_extra_args+=(--test-args "--expected-users ${{ matrix.expected_users }}")
+          fi
+          # Add --deselect for each test that doesn't apply to this flavor
+          deselect_json='${{ toJSON(matrix.deselect_tests) }}'
+          if [ "$deselect_json" != "[]" ] && [ "$deselect_json" != "null" ]; then
+            while IFS= read -r test_id; do
+              test_extra_args+=(--test-args "--deselect $test_id")
+            done < <(echo "$deselect_json" | jq -r '.[]')
+          fi
+          if [ "${{ matrix.use_chroot }}" = "true" ]; then
+            # _usi flavors: initrd embeds EROFS (not squashfs) and lacks gardenlinux-live,
+            # so QEMU live-boot is not possible. Use the .tar rootfs for chroot testing instead.
+            ./test "${test_extra_args[@]}" ".build/$CNAME.tar"
+          elif [ -e ".build/$CNAME.raw" ]; then
+            ./test "${test_extra_args[@]}" ".build/$CNAME.raw"
+          elif [ -e ".build/$CNAME.pxe.tar.gz" ]; then
+            ./test "${test_extra_args[@]}" ".build/$CNAME.pxe.tar.gz"
+          elif [ -e ".build/$CNAME.iso" ]; then
+            ./test "${test_extra_args[@]}" ".build/$CNAME.iso"
+          else
+            echo "no raw, pxe or iso file found, QEMU test failed"
+            exit 1
+          fi
+      - name: Copy test results
+        if: always()
+        run: |
+          cp tests/log/qemu.test.log .build/${CNAME}.qemu.test.log || true
+          cp tests/log/qemu.test.xml .build/${CNAME}.qemu.test.xml || true
+          cp tests/log/chroot.test.log .build/${CNAME}.chroot.test.log || true
+          cp tests/log/chroot.test.xml .build/${CNAME}.chroot.test.xml || true
+      - name: Upload test results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pin@v7.0.1
+        if: always()
+        with:
+          if-no-files-found: ignore
+          name: qemu-test-${{ env.CNAME }}
+          path: |
+            .build/${{ env.CNAME }}.qemu.test.log
+            .build/${{ env.CNAME }}.qemu.test.xml
+            .build/${{ env.CNAME }}.chroot.test.log
+            .build/${{ env.CNAME }}.chroot.test.xml
