@@ -61,7 +61,7 @@ update:
 	new_builder_image=$$(grep -m1 '^container_image=' $(ROOT_DIR)/gardenlinux/build | cut -d= -f2); \
 	current_builder_image=$$(grep -m1 '^container_image=' $(ROOT_DIR)/build | cut -d= -f2); \
 	if [ "$$new_builder_image" != "$$current_builder_image" ]; then \
-		$(SED) -i -E 's|^container_image=.*|container_image=$$new_builder_image|' $(ROOT_DIR)/build; \
+		$(SED) -i -E 's|^container_image=.*|container_image='$$new_builder_image'|' $(ROOT_DIR)/build; \
 	fi
 
 clean:
