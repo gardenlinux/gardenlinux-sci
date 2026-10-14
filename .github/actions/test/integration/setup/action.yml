@@ -12,11 +12,28 @@ runs:
         sudo virsh net-start default
         sudo virsh net-autostart default
 
-    - name: Copy ignition file
+    - name: Create OVMF VARS with boot entry for HV disk
       shell: bash
       run: |
-        sudo cp "/opt/${TAG}-hv1.ign" /var/lib/libvirt/images/HV1.ign
-        sudo cp "/opt/${TAG}-hv2.ign" /var/lib/libvirt/images/HV2.ign
+        sudo mkdir -p /var/lib/libvirt/qemu/nvram
+
+        # Inject a File(\EFI\BOOT\BOOTX64.EFI) boot entry into VARS so OVMF
+        # finds it before the device-level Sata() entry created by bootindex=1.
+        # OVMF tries BootOrder entries in order; our entry becomes Boot0000 and
+        # goes first, so it finds the UKI at \EFI\BOOT\BOOTX64.EFI on the ESP.
+        #
+        # No extra kernel args in optional data: the UKI's embedded .cmdline is
+        # used as-is, and the VAR partition is pre-populated by the build step
+        # so the system boots directly into the production system without
+        # running the firstboot/persist flow.
+        virt-fw-vars \
+          --input /usr/share/OVMF/OVMF_VARS_4M.fd \
+          --output /tmp/VARS-hv.fd \
+          --append-boot-filepath '\EFI\BOOT\BOOTX64.EFI'
+        echo "VARS created successfully with boot entry"
+
+        sudo cp /tmp/VARS-hv.fd /var/lib/libvirt/qemu/nvram/HV1_VARS.fd
+        sudo cp /tmp/VARS-hv.fd /var/lib/libvirt/qemu/nvram/HV2_VARS.fd
 
     - name: Create HyperVisor 1
       shell: bash
@@ -46,7 +63,7 @@ runs:
         KEY=/opt/ssh_host_ed25519_key
         SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
         USER="root"
-        MAX_ITER=30
+        MAX_ITER=90
 
         setup_hv() {
           local IP="$1"
@@ -83,17 +100,23 @@ runs:
             virsh net-define /opt/virbr-vm.xml
             virsh net-start default
             virsh net-autostart default
+
+            # Create log directory for cloud-hypervisor virtlogd
+            mkdir -p /var/log/libvirt/ch
         EOF
         }
 
+        # The libvirt network assigns static DHCP reservations by MAC, so each
+        # HV always has a fixed IP (HV1 -> .2, HV2 -> .3). We SSH directly to
+        # that IP instead of polling `virsh domifaddr`: the lease table is
+        # cleared when the first boot reboots into the production image, so
+        # domifaddr is unreliable while the second boot re-acquires its lease.
         wait_for_ssh() {
           local VM_NAME="$1"
+          local IP="$2"
 
           for ((i=1; i<=MAX_ITER; i++)); do
-            local IP=$(sudo virsh domifaddr "$VM_NAME" | awk '/ipv4/ {print $4}' | cut -d'/' -f1)
-            if [ -z "$IP" ]; then
-              echo "No IP address found for $VM_NAME. Retrying..."
-            elif ssh $SSH_OPTS "$USER@$IP" 'exit' 2>/dev/null; then
+            if ssh $SSH_OPTS "$USER@$IP" 'exit' 2>/dev/null; then
               echo "$VM_NAME is up at IP: $IP"
               setup_hv "$IP"
               break
@@ -103,10 +126,10 @@ runs:
               sudo cat "/var/log/$VM_NAME.log"
               exit 1
             fi
-            echo "Waiting for $VM_NAME to respond to SSH... ($i/$MAX_ITER)"
+            echo "Waiting for $VM_NAME to respond to SSH at $IP... ($i/$MAX_ITER)"
             sleep 10
           done
         }
 
-        wait_for_ssh HV1
-        wait_for_ssh HV2
+        wait_for_ssh HV1 192.168.122.2
+        wait_for_ssh HV2 192.168.122.3

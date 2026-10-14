@@ -52,6 +52,54 @@ storage:
         OCI_REPO=ghcr.io/gardenlinux/gardenlinux-sci
         # point to a custom tag to download for the persist step
         OCI_TAG=TAG_GOES_HERE
+  # Hook called by persist (chrooted into the new sysroot) after the UKI is
+  # downloaded and before systemd-repart partitions the disk.
+  # The chroot runs against the overlay-mounted sysroot: writes to /etc/ go
+  # to /sysroot/var/etc.overlay/ which is copied to the VAR partition by
+  # systemd-repart and applied as the /etc overlay upper layer on second boot.
+  - path: /opt/persist/network_up.sh
+    mode: 0755
+    contents:
+      inline: |
+        #!/usr/bin/env bash
+        set -Eeuo pipefail
+
+        # 1. Drop a systemd-networkd config so the second boot gets DHCP on all
+        #    Ethernet interfaces (virtio-net shows up as e*).
+        mkdir -p /etc/systemd/network
+        printf '[Match]\nName=e*\n\n[Network]\nDHCP=yes\n' \
+            > /etc/systemd/network/80-dhcp.network
+        echo "Wrote /etc/systemd/network/80-dhcp.network"
+
+        # 2. Enable systemd-networkd and ssh for the second boot by creating
+        #    the wants symlinks directly (systemctl may not work in chroot).
+        mkdir -p /etc/systemd/system/multi-user.target.wants
+        mkdir -p /etc/systemd/system/network-online.target.wants
+        ln -sf /usr/lib/systemd/system/systemd-networkd.service \
+            /etc/systemd/system/multi-user.target.wants/systemd-networkd.service || true
+        ln -sf /usr/lib/systemd/system/systemd-networkd-wait-online.service \
+            /etc/systemd/system/network-online.target.wants/systemd-networkd-wait-online.service || true
+        ln -sf /usr/lib/systemd/system/ssh.service \
+            /etc/systemd/system/multi-user.target.wants/ssh.service || true
+
+        # 3. Allow root SSH login with the authorized key on the second boot.
+        #    The first-boot ignition config wrote the key to /etc/ssh/authorized_keys
+        #    on the host (first-boot) system. We read it from outside the chroot
+        #    via /proc/1/root (the initrd's real root) and write it into the sysroot.
+        mkdir -p /etc/ssh
+        printf 'PermitRootLogin yes\nAuthorizedKeysFile /etc/ssh/authorized_keys\nProtocol 2\nAuthenticationMethods publickey\nSubsystem sftp /usr/lib/openssh/sftp-server\n' \
+            > /etc/ssh/sshd_config
+        # /proc is bind-mounted into the chroot by the kernel; /proc/1/root is
+        # the initrd root from which we can read the first-boot authorized_keys.
+        if [ -f /proc/1/root/etc/ssh/authorized_keys ]; then
+            cp /proc/1/root/etc/ssh/authorized_keys /etc/ssh/authorized_keys
+            chmod 600 /etc/ssh/authorized_keys
+            echo "Copied authorized_keys from first-boot into second-boot sysroot"
+        else
+            echo "WARNING: authorized_keys not found at /proc/1/root/etc/ssh/authorized_keys"
+        fi
+
+        echo "network_up.sh complete"
   # Enable unlimited core dumps for all systemd services
   - path: /etc/systemd/system.conf.d/10-core.conf
     mode: 0644
@@ -86,3 +134,5 @@ systemd:
       mask: true
     - name: libvirtd-tcp.socket
       mask: true
+    - name: ssh.service
+      enabled: true

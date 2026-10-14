@@ -34,7 +34,7 @@ jobs:
         id: version
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "VERSION=today" >> $GITHUB_OUTPUT
+            echo "VERSION=$(./gardenlinux/bin/garden-version now)" >> $GITHUB_OUTPUT
           else
             echo "VERSION=$(cat VERSION)" >> $GITHUB_OUTPUT
           fi
@@ -74,9 +74,17 @@ jobs:
           IMAGE_TAG=$(.github/scripts/compute-image-tag.sh "${UPLOAD_VERSION}")
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
+  test_qemu:
+    name: QEMU / chroot tests
+    needs: [build]
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.action != 'closed' }}
+    uses: ./.github/workflows/test_qemu.yml
+    permissions:
+      actions: write
+
   upload:
     name: Upload PR image to OCI
-    needs: [build, meta, set_version]
+    needs: [build, meta, set_version, test_qemu]
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.action != 'closed' }}
     uses: ./.github/workflows/upload_oci.yml
     with:
@@ -84,14 +92,6 @@ jobs:
       upload_version: ${{ needs.meta.outputs.UPLOAD_VERSION }}
       flavor_filter: '--include-only "baremetal-sci_usi-amd64"'
     secrets: inherit
-
-  test:
-    name: Test PR image
-    needs: [set_version, meta, upload]
-    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.action != 'closed' }}
-    uses: ./.github/workflows/test.yml
-    with:
-      image_tag: ${{ needs.meta.outputs.image_tag }}
 
   cleanup_images:
     name: Cleanup PR images

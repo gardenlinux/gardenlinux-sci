@@ -16,7 +16,8 @@ runs:
           libvirt-clients \
           virtinst \
           bridge-utils \
-          ovmf
+          ovmf \
+          python3-virt-firmware
 
     # Required for storing the ignition file in /var/lib/libvirt/images
     - name: Disable libvirt qemu security driver

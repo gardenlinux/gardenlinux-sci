@@ -6,8 +6,11 @@ exec 2>&1
 set -eufo pipefail
 
 # if ignition is enabled, bail out, it's supposed to be persisted to disk
+# Firstboot is detected via kernel cmdline (set by provisioner/UEFI boot entry
+# optional data) or via QEMU fw_cfg ignition config (CI/QEMU).
 # TODO: use getargbool
-if grep -q "ignition.firstboot=1" /proc/cmdline; then
+if grep -q "ignition.firstboot=1" /proc/cmdline || \
+   [ -s /sys/firmware/qemu_fw_cfg/by_name/opt/com.coreos/config/raw ]; then
 	exit 0
 fi
 

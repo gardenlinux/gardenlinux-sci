@@ -46,13 +46,13 @@ runs:
           KEY=/opt/ssh_host_ed25519_key
           SSH_OPTS="-i \$KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
           USER="root"
+          # IP is a static DHCP reservation by MAC (virbr-vm.xml); same as the
+          # post-migration verify step — no need to poll virsh domifaddr.
+          IP="192.168.222.3"
 
           MAX_ITER=60
           for ((i=1; i<=MAX_ITER; i++)); do
-            IP=\$(virsh -c ch:///session domifaddr VM-CHV | awk '/ipv4/ {print \$4}' | cut -d'/' -f1)
-            if [ -z "\$IP" ]; then
-              echo "No IP address found for VM. Retrying..."
-            elif (( i >= MAX_ITER - 2 )); then
+            if (( i >= MAX_ITER - 2 )); then
               # Show SSH errors on last 3 attempts for debugging
               if ssh \$SSH_OPTS "\$USER@\$IP" 'exit'; then
                 echo "VM is up at IP: \$IP"
@@ -81,7 +81,7 @@ runs:
               echo "=== END DIAGNOSTICS ==="
               exit 1
             fi
-            echo "Waiting for VM to respond to SSH... (\$i/\$MAX_ITER)"
+            echo "Waiting for VM to respond to SSH at \$IP... (\$i/\$MAX_ITER)"
             sleep 10
           done
         EOF
