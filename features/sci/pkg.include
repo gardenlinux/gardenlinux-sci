@@ -5,6 +5,3 @@ mdevctl
 multipath-tools
 open-iscsi
 openvswitch-switch
-systemd-container
-wget
-xz-utils

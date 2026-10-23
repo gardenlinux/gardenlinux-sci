@@ -1,0 +1,8 @@
+description: "SCI Baremetal OS - dev (virtual host feature)"
+type: element
+features:
+  include:
+    - _kvmCh
+    - _kvmQemu
+    - scibase
+    - server

@@ -43,7 +43,7 @@ targets:
         test-platform: false
         publish: false
       - features:
-          - sci
+          - scidev
           - _usidev
         arch: amd64
         build: true

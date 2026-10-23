@@ -2,5 +2,6 @@ description: "SCI Baremetal OS (virtual host feature)"
 type: element
 features:
   include:
+    - _kvmCh
     - scibase
-    - vhost
+    - server
