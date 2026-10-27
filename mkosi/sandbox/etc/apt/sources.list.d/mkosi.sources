@@ -1,0 +1,5 @@
+Types: deb
+URIs: https://packages.gardenlinux.io/gardenlinux
+Suites: 2150.9.0
+Components: main
+Signed-By: /usr/share/keyrings/gardenlinux.gpg

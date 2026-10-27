@@ -2,3 +2,7 @@
 .envrc
 .venv
 shell.nix
+__pycache__/
+.pytest_cache/
+docs/sysext-handover.md
+.actrc

@@ -1,0 +1,16 @@
+[Unit]
+Description=SCI network activation (delivery-time OVS setup)
+After=systemd-sysext.service network-online.target
+Wants=systemd-sysext.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Run tmpfiles before OVS so ovs-ctl's conf.db becomes a link, not a real file.
+ExecStart=-/usr/sbin/modprobe openvswitch
+ExecStart=/usr/bin/systemd-sysusers
+ExecStart=/usr/bin/systemd-tmpfiles --create
+ExecStart=/usr/bin/systemctl start openvswitch-switch.service ovs-record-hostname.service
+
+[Install]
+WantedBy=multi-user.target
