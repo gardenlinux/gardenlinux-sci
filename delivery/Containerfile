@@ -1,0 +1,19 @@
+# SCI delivery image; the staging directory is the build context.
+# FROM is pinned by digest: resolve with `docker buildx imagetools inspect`.
+FROM docker.io/library/debian@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
+
+ENV HOST_ROOT=/host \
+    STAGING_DIR=/opt/sci \
+    INTERVAL=60 \
+    NSENTER=1
+
+# Fetch mode downloads and verifies a signed build from the host network.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . /opt/sci/
+COPY sci-delivery.sh /usr/local/bin/sci-delivery.sh
+RUN chmod 0755 /usr/local/bin/sci-delivery.sh
+
+ENTRYPOINT ["/usr/local/bin/sci-delivery.sh"]

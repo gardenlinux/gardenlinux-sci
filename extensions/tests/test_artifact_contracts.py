@@ -131,6 +131,13 @@ def test_static_input_contract():
                     "virt builds; without explicit removal the delta double-ships the "
                     "libvirt-owned paths (420 in ch, 265 in qemu) and the lexical overlay merge "
                     "silently shadows one copy")
+    manifest, = (ROOT / "delivery").glob("extensions.manifest*")
+    lines = [line for line in manifest.read_text().splitlines() if line and not line.startswith("#")]
+    assert lines.count("TARGET_BASE=2150") == 1
+    names = [line.split()[0] for line in lines if "=" not in line]
+    assert len(names) == len(set(names)) and set(names) == deployables, (
+        "the delivery manifest must list every deployable exactly once and name "
+        "no other extension: the repo curates the full set")
     for name in ("tools.pin", "summary.pin"):
         pin(MKOSI / name)
     assert values(MKOSI / "base-image.pin", "VERSION") == [release]
