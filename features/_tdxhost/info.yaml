@@ -1,0 +1,2 @@
+description: "Intel TDX host enablement (opts kvm_intel into tdx=1)"
+type: flag
