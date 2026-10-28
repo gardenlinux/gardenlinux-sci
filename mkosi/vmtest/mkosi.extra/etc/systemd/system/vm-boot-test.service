@@ -1,0 +1,18 @@
+[Unit]
+Description=SCI systemd-sysext scenario boot test
+# Wants=, not Requires=: a refused (tampered/unsigned) merge is a valid negative result.
+After=systemd-sysext.service
+Wants=systemd-sysext.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=900
+# Keep stdout in the journal so the SCI-RESULT console record is not duplicated.
+StandardOutput=journal
+StandardError=journal
+ExecStart=/opt/sci-tests/run_guest.sh
+# Runs on success, failure and timeout, so a failed scenario still powers off.
+ExecStopPost=/usr/bin/systemctl --no-block poweroff
+
+[Install]
+WantedBy=multi-user.target

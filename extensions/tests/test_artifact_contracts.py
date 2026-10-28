@@ -17,6 +17,41 @@ STATE = ROOT / ".build/mkosi"
 IMAGES = ("sci-10-base", "sci-20-compute", "sci-21-network", "sci-22-storage", "sci-40-libvirt", "sci-50-virt-ch", "sci-51-virt-qemu")
 TYPES = ("4f68bce3-e8cd-4db1-96e7-fbcaf984b709", "2c7357ed-ebd2-46d9-aec1-23d437ec2bf5",
          "41092b05-9fc8-4523-994f-2def0408b176")
+REQUIRED = {
+    "sci-10-base": ("usr/sbin/conntrack", "usr/sbin/parted"),
+    "sci-20-compute": ("usr/lib/sysusers.d/sci-compute.conf", "usr/lib/tmpfiles.d/sci-compute.conf"),
+    "sci-21-network": ("usr/bin/ovs-vsctl", "usr/sbin/ovsdb-server", "usr/sbin/ovs-vswitchd"),
+    # Base ships the multipath/iSCSI stack; the delta carries only its activation contract.
+    "sci-22-storage": ("usr/lib/modprobe.d/nfsclient.conf", "usr/lib/tmpfiles.d/sci-storage.conf",
+                      "usr/share/sci/activation/sci-22-storage-activation.service"),
+    "sci-40-libvirt": ("usr/sbin/libvirtd", "usr/bin/virsh", "usr/lib/tmpfiles.d/sci-libvirt.conf",
+                       "usr/bin/swtpm"),
+    "sci-50-virt-ch": ("usr/bin/cloud-hypervisor", "usr/bin/ch-remote", "usr/sbin/virtchd",
+                       "usr/lib/x86_64-linux-gnu/libvirt/connection-driver/libvirt_driver_ch.so",
+                       "usr/share/cloud-hypervisor/CLOUDHV_EFI.fd"),
+    "sci-51-virt-qemu": ("usr/bin/qemu-system-x86_64", "usr/bin/qemu-img", "usr/bin/qemu-nbd",
+                      "usr/share/OVMF/OVMF_CODE_4M.fd",
+                      "usr/lib/x86_64-linux-gnu/libvirt/connection-driver/libvirt_driver_qemu.so",
+                      "usr/share/sci/etc/libvirt/qemu.conf"),
+}
+# Base-owned content in the merged host view; a delta must not re-ship it.
+BASE_OWNED = {
+    "sci-22-storage": ("usr/sbin/multipathd", "usr/sbin/multipath", "usr/sbin/iscsid",
+                    "usr/sbin/iscsiadm", "usr/bin/iscsiadm",
+                    "usr/lib/systemd/system/multipathd.service",
+                    "usr/lib/systemd/system/multipathd.socket",
+                    "usr/lib/systemd/system/iscsid.service",
+                    "usr/lib/systemd/system/iscsid.socket",
+                    "usr/lib/udev/rules.d/56-dm-mpath.rules"),
+}
+PARENT_ONLY = ("usr/sbin/libvirtd", "usr/bin/virsh", "usr/lib/sysusers.d/libvirt-qemu.conf",
+               "usr/lib/sysusers.d/libvirt.conf", "usr/lib/tmpfiles.d/sci-libvirt.conf",
+               "usr/lib/systemd/system/libvirtd.service.d/sci-resident.conf",
+               # swtpm is hypervisor-agnostic: a qemu-free trim keeps vTPM.
+               "usr/bin/swtpm", "usr/bin/swtpm_setup", "usr/sbin/swtpm_setup")
+QEMU_ONLY = ("usr/bin/qemu-system-x86_64", "usr/bin/qemu-img", "usr/bin/qemu-nbd",
+             "usr/share/doc/libvirt-daemon-system",
+             "usr/lib/x86_64-linux-gnu/libvirt/connection-driver/libvirt_driver_qemu.so")
 
 
 def run(*args, cwd=ROOT):
@@ -144,6 +179,11 @@ def test_static_input_contract():
     for field in ("TARBALL_SHA256", "ROOTFS_TAR_SHA256"):
         digest, = values(MKOSI / "base-image.pin", field)
         assert re.fullmatch(r"[0-9a-f]{64}", digest)
+    key, = values(MKOSI / "mkosi.conf", "VerityKey")
+    key_path = (MKOSI / key).resolve().relative_to(ROOT)
+    assert key_path.is_relative_to(".build")
+    assert not run("git", "ls-files", "--", str(key_path)).strip()
+    run("git", "check-ignore", "-q", "--", str(key_path))
 
 
 def test_qemu_vnc_range_carrier():
@@ -182,6 +222,36 @@ def test_resolved_summary_pin():
     assert binary.is_file(), f"mkosi venv missing: {binary}"
     digest = summary.resolved_config_digest(binary, MKOSI, ROOT / "bin/garden-version", ROOT)
     assert digest == pin(MKOSI / "summary.pin")
+
+
+@pytest.mark.build
+@pytest.mark.parametrize("image", IMAGES)
+def test_signed_delta(image, evidence_root):
+    dest = extract_root(image, evidence_root / "extracted" / image)
+    for path in REQUIRED[image]:
+        assert (dest / path).is_file() or (dest / path).is_symlink(), (image, path)
+    base = STATE / "base-image/current"
+    for path in BASE_OWNED.get(image, ()):
+        assert (base / path).is_file() or (base / path).is_symlink(), (image, path)
+        assert not ((dest / path).is_file() or (dest / path).is_symlink()), (image, path)
+    release = dest / f"usr/lib/extension-release.d/extension-release.{image}"
+    assert values(release, "ID") == ["gardenlinux"]
+    assert values(release, "SYSEXT_SCOPE") == ["system"]
+    assert not (dest / "usr/lib/verity.d").exists()
+    for path in ("etc/os-release", "usr/lib/os-release", "usr/bin/systemctl", "usr/lib/systemd/systemd",
+                 "usr/bin/dpkg", "usr/lib/x86_64-linux-gnu/libc.so.6"):
+        assert not (dest / path).exists() and not (dest / path).is_symlink(), (image, path)
+    assert not list((dest / "usr/lib/modules").glob("*/vmlinuz"))
+    if image in {"sci-40-libvirt", "sci-50-virt-ch"}:
+        for path in QEMU_ONLY:
+            assert not (dest / path).exists() and not (dest / path).is_symlink(), (image, path)
+        assert not list((dest / "usr/bin").glob("qemu*"))
+        assert not (dest / "usr/share/qemu").exists()
+    if image in {"sci-50-virt-ch", "sci-51-virt-qemu"}:
+        for path in PARENT_ONLY:
+            assert not (dest / path).exists() and not (dest / path).is_symlink(), (image, path)
+    if image != "sci-40-libvirt":
+        assert not (dest / "usr/lib/sysusers.d/sci-libvirt.conf").exists()
 
 
 @pytest.mark.build
