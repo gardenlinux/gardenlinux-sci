@@ -21,7 +21,7 @@ concurrency:
 jobs:
   set_version:
     if: ${{ github.event_name != 'pull_request' || github.event.action != 'closed' }}
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-24.04
     outputs:
       VERSION: ${{ steps.version.outputs.VERSION }}
     steps:
@@ -58,7 +58,7 @@ jobs:
   meta:
     name: Compute image metadata
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.action != 'closed' }}
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-24.04
     outputs:
       UPLOAD_VERSION: ${{ steps.meta.outputs.upload_version }}
       image_tag: ${{ steps.meta.outputs.image_tag }}
@@ -96,7 +96,7 @@ jobs:
   cleanup_images:
     name: Cleanup PR images
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.action == 'closed' }}
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Cleanup OCI images via GitHub API
         run: |

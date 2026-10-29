@@ -20,7 +20,7 @@ jobs:
   upload_gl_artifacts:
     name: upload to OCI
     needs: [ generate_matrix_publish ]
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-24.04
     defaults:
       run:
         shell: bash
@@ -99,7 +99,7 @@ jobs:
   upload_manifests_entries:
     needs: [ generate_matrix_publish, upload_gl_artifacts ]
     name: upload manifest entries into OCI index
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-24.04
     defaults:
       run:
         shell: bash
