@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # pin@v4.1.1
         with:
           submodules: true
-      - uses: oras-project/setup-oras@005458ad77f1c8facd38a094e4af2e69e5607ff4 # v2
+      - uses: oras-project/setup-oras@5e2f2482b30b0cb3e14e67f89a80c88c659a7c63 # v2
       - run: oras version
       - name: Install python-gardenlinux-lib
         uses: gardenlinux/python-gardenlinux-lib/.github/actions/setup@efdffb9a6b279cd7aada23b02baf4ec2534dc6d2
