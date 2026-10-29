@@ -27,6 +27,15 @@
       ],
       "groupName": "Group GitHub Actions",
       "separateMajorMinor": false
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "ubuntu"
+      ],
+      "allowedVersions": "24.04"
     }
   ]
 }
