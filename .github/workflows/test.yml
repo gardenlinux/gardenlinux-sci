@@ -12,6 +12,11 @@ on:
         description: "Image tag to test (must be usi-sci)"
         type: string
         required: true
+      uki_path:
+        description: "Optional local path to UKI file. If set, skip GHCR pull."
+        type: string
+        required: false
+        default: ""
 
 jobs:
   test:
@@ -20,10 +25,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install oras
+        if: ${{ inputs.uki_path == '' }}
         uses: oras-project/setup-oras@005458ad77f1c8facd38a094e4af2e69e5607ff4 # v2
         with:
           version: 1.2.2
       - name: Validate image tag
+        if: ${{ inputs.uki_path == '' }}
         run: |
           if [ -z "${{ inputs.image_tag }}" ]; then
             echo "Error: image_tag is required"
@@ -43,6 +50,7 @@ jobs:
         uses: ./.github/actions/test/integration/build
         with:
           image_tag: ${{ inputs.image_tag }}
+          uki_path: ${{ inputs.uki_path }}
       - name: Setup
         uses: ./.github/actions/test/integration/setup
       - name: Test QEMU

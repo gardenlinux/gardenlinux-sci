@@ -5,10 +5,18 @@ exec 2>&1
 
 set -Eeufo pipefail
 
-if ! grep -q 'ignition.firstboot=1' /proc/cmdline; then
+# Check for firstboot mode: either via kernel cmdline (set by provisioner/UEFI
+# boot entry optional data) or via QEMU fw_cfg ignition config (CI/QEMU).
+is_firstboot() {
+    grep -q 'ignition.firstboot=1' /proc/cmdline || \
+    [ -s /sys/firmware/qemu_fw_cfg/by_name/opt/com.coreos/config/raw ]
+}
+
+if ! is_firstboot; then
 
 # repart should be disabled
 # TODO: find nicer way to disable
+mkdir -p "$1/systemd-repart.service.d"
 cat > "$1/systemd-repart.service.d/override.conf" << EOF
 [Unit]
 
