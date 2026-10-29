@@ -11,6 +11,15 @@ targets:
         test-platform: false
         publish: false
       - features:
+          - sci
+          - _pxe
+          - _tdxhost
+        arch: amd64
+        build: true
+        test: true
+        test-platform: false
+        publish: false
+      - features:
           - capi
         arch: amd64
         build: true
