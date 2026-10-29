@@ -1,0 +1,15 @@
+dmidecode
+dnsmasq-base
+libgoogle-perftools4
+libtcmalloc-minimal4
+libxml2-utils
+swtpm
+wget
+xz-utils
+# dependencies of libvirt
+gettext-base
+libiscsi7
+libpciaccess0
+libssh-4
+libxml2-utils
+mdevctl
