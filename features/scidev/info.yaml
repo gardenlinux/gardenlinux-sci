@@ -4,5 +4,6 @@ features:
   include:
     - _kvmCh
     - _kvmQemu
+    - sci
     - scibase
     - server
