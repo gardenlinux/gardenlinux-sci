@@ -1,5 +1,7 @@
 dmidecode
 dnsmasq-base
+# Required by dnsmasq at runtime
+libnftables1
 libgoogle-perftools4
 libtcmalloc-minimal4
 libxml2-utils
