@@ -53,7 +53,7 @@ runs:
 
           # Configure SSH between HyperVisors
           scp $SSH_OPTS /opt/ssh_host_ed25519_key "$USER@$IP:/opt/ssh_host_ed25519_key"
-          ssh $SSH_OPTS "$USER@$IP" << EOF
+          ssh $SSH_OPTS "$USER@$IP" 'bash -se' << 'EOF'
             chmod 700 /root/.ssh
             echo "" > /root/.ssh/config
             echo "Host 192.168.122.*" >> /root/.ssh/config
@@ -68,7 +68,7 @@ runs:
 
           # Set up libvirt storage pool and network
           scp $SSH_OPTS ./.github/actions/test/integration/setup/virbr-vm.xml "$USER@$IP:/opt/virbr-vm.xml"
-          ssh $SSH_OPTS "$USER@$IP" << EOF
+          ssh $SSH_OPTS "$USER@$IP" 'bash -se' << 'EOF'
             systemctl start libvirtd
 
             virsh pool-destroy default || true
