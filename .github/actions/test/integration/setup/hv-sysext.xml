@@ -1,0 +1,42 @@
+<domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
+    <name>HV_NAME_GOES_HERE</name>
+    <memory unit='GiB'>6</memory>
+    <vcpu>4</vcpu>
+    <os>
+        <type arch='x86_64'>hvm</type>
+        <kernel>KERNEL_GOES_HERE</kernel>
+        <cmdline>root=PARTUUID=ROOT_UUID_GOES_HERE console=ttyS0 systemd.gpt_auto=0 audit=0 rw</cmdline>
+        <boot dev='hd' />
+    </os>
+    <features>
+        <acpi />
+    </features>
+    <cpu mode='host-passthrough' check='none' migratable='on' />
+    <devices>
+        <interface type='network'>
+            <mac address='MAC_GOES_HERE' />
+            <source network='NETWORK_GOES_HERE' />
+            <model type='virtio' />
+            <!-- Keep the libvirt-assigned NIC out of slot 0x02: the NVMe
+                 device arrives through qemu:commandline and QEMU claims the
+                 first free PCI slot (0x02) for it. -->
+            <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0' />
+        </interface>
+        <memballoon model='virtio'>
+            <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0' />
+        </memballoon>
+        <console type='pty'>
+            <target type='serial' port='0' />
+        </console>
+        <serial type='file'>
+            <source path='/var/log/HV_NAME_GOES_HERE.log' />
+            <target port='0' />
+        </serial>
+    </devices>
+    <qemu:commandline>
+        <qemu:arg value='-blockdev' />
+        <qemu:arg value='driver=qcow2,node-name=sciroot,file.driver=file,file.filename=DISK_PREFIX_GOES_HERE/HV_NAME_GOES_HERE.qcow2' />
+        <qemu:arg value='-device' />
+        <qemu:arg value='nvme,serial=HV_NAME_GOES_HERE,drive=sciroot,bootindex=1' />
+    </qemu:commandline>
+</domain>

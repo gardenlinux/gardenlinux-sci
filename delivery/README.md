@@ -3,8 +3,8 @@
 **Scope.** `sci-delivery.sh` is this repository's boot-test vehicle: the
 boot test and the integration job run it inside a Garden Linux VM to
 prove that the built set merges and activates. It is not a supported
-consumer agent. The supported output is the built extension set.
-How a consumer selects, stages
+consumer agent. The supported output is the signed release (see "What
+is published"); how a consumer selects, stages
 and merges those bytes, provisions the verity anchor in the base image,
 and keeps a staging directory across restarts is the consumer's
 decision. Image mode and fetch mode are two ways to run the test
@@ -167,8 +167,8 @@ so a root `mkosi.conf` value never reaches the sysext subimages, and each
 subimage would write a separate `<image>.SHA256SUMS` in binary-mode format.
 
 The image is a test artifact, tagged only `$IMAGE_TAG` (default
-`sci-delivery:latest`). There is no published image; the image is a
-test artifact.
+`sci-delivery:latest`). It is not published; the published product is
+the release below.
 
 ```sh
 bash delivery/build-image.sh          # validates, stages into .build/delivery/staging, builds the image
@@ -188,6 +188,23 @@ review.
 
 `build-image.sh` fails loudly (before invoking docker) when a manifest entry
 has no raw, or when a staged shim is not listed in the manifest.
+
+## What is published
+
+The `publish` job creates one GitHub release per build, tagged
+`<Release>-g<short sha>` (for example `2150.9.0-g1a2b3c4`). Without
+`SYSEXT_UNHARDENED_SIGNING_KEY` the release steps are skipped, so no
+release exists. The release carries:
+
+* every `<name>.raw` named in `extensions.manifest`;
+* every activation shim the extensions ship;
+* `extensions.manifest`;
+* `verity-run.crt`, the public certificate that signed the raws;
+* `SHA256SUMS` and `SHA256SUMS.sig`.
+
+The release carries no delivery program or scripts: `sci-delivery.sh`
+stays in the `sysext-raws` test artifact, which the integration job uses
+to rebuild the image.
 
 ## The delivery manifest
 

@@ -1,0 +1,207 @@
+name: sysext
+on:
+  push:
+    branches:
+      - sysext-virt
+      - sysext-*
+  pull_request:
+    paths-ignore:
+      - "**/README.md"
+      - "docs/**"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  quick-suite:
+    name: Quick extension suite
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: recursive
+      - name: Run the quick extension suite
+        shell: bash
+        run: |
+          python3 -m venv .build/venv-test
+          .build/venv-test/bin/pip install --quiet pytest==8.4.2 PyYAML==6.0.3
+          .build/venv-test/bin/python -m pytest extensions/tests/ -q -m 'not vm and not build'
+  producer:
+    name: Build the sysext delivery artifacts
+    needs: quick-suite
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: recursive
+      - name: Provide the signing key
+        shell: bash
+        env:
+          SYSEXT_UNHARDENED_SIGNING_KEY: ${{ secrets.SYSEXT_UNHARDENED_SIGNING_KEY }}
+        run: |
+          install -d -m 0700 .build/keys
+          if [ -n "${SYSEXT_UNHARDENED_SIGNING_KEY:-}" ]; then
+            printf '%s\n' "$SYSEXT_UNHARDENED_SIGNING_KEY" > .build/keys/sysext-verity.key
+            chmod 600 .build/keys/sysext-verity.key
+            openssl req -x509 -key .build/keys/sysext-verity.key -days 3650 \
+              -subj "/CN=sci-sysext-unhardened" \
+              -out mkosi/verity.crt
+            echo "using the repository signing key"
+          else
+            openssl req -x509 -newkey rsa:3072 -nodes -days 1 \
+              -subj "/CN=sci-sysext-run" \
+              -keyout .build/keys/sysext-verity.key \
+              -out mkosi/verity.crt
+            chmod 600 .build/keys/sysext-verity.key
+            echo "no repository signing key; using a run-local key"
+          fi
+      - name: Create the mkosi venv
+        shell: bash
+        run: |
+          python3 -m venv .build/mkosi/venv
+          .build/mkosi/venv/bin/pip install --quiet "mkosi @ git+https://github.com/systemd/mkosi.git@v27.1"
+      - name: Ensure the published base tree
+        shell: bash
+        run: bash mkosi/base-image.sh ensure
+      # mkosi's sandbox builds unprivileged through user namespaces; the
+      # runner's AppArmor blocks them by default.
+      - name: Relax the runner's user-namespace restriction
+        shell: bash
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Build the extensions
+        shell: bash
+        run: bash mkosi/build.sh
+      - name: Pull the pinned builder image
+        shell: bash
+        run: docker pull ghcr.io/gardenlinux/builder:f7cf91087f7580c6c3aefb26af6cee7df89a9938
+      - name: Build the guest runtime archive
+        shell: bash
+        run: |
+          install -d .build/sysext-runtime/build \
+                     .build/sysext-runtime/work/tmp \
+                     .build/sysext-runtime/work/home \
+                     .build/sysext-runtime/work/pip-cache
+          docker build -q -t sci-sysext-runtime-builder -f - .build/sysext-runtime/build <<'EOF'
+          FROM debian:stable
+          RUN apt-get update \
+            && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl
+          EOF
+          docker run --rm \
+            -v "$PWD/gardenlinux/tests/util/build_runtime.sh:/init:ro" \
+            -v "$PWD/gardenlinux/tests/util:/src:ro" \
+            -v "$PWD/.build/sysext-runtime:/work" \
+            -w /work --user "$(id -u):$(id -g)" \
+            -e HOME=/work/work/home -e TMPDIR=/work/work/tmp \
+            -e PIP_CACHE_DIR=/work/work/pip-cache \
+            sci-sysext-runtime-builder \
+            /init /src/requirements.txt /src/python.env.sh /work/runtime.tar.gz
+      - name: Create the test venv
+        shell: bash
+        run: |
+          python3 -m venv .build/venv-test
+          .build/venv-test/bin/pip install --quiet pytest==8.4.2 PyYAML==6.0.3
+      - name: Install the VM boot prerequisites
+        shell: bash
+        run: |
+          if command -v sudo >/dev/null 2>&1; then SUDO=sudo; else SUDO=; fi
+          $SUDO apt-get update
+          $SUDO apt-get install -y qemu-system-x86 fdisk
+          # The VM boot test needs /dev/kvm as the runner user.
+          if [ -e /dev/kvm ]; then $SUDO chmod 666 /dev/kvm; fi
+      - name: Run the full extension suite
+        shell: bash
+        run: .build/venv-test/bin/python -m pytest extensions/tests/ -q
+      # The raws artifact: the staging as plain files, no container runtime
+      # needed in the integration test.
+      - name: Stage the raws for download
+        shell: bash
+        run: |
+          STAGING_OUT=.build/delivery/staging-raws bash delivery/build-image.sh --stage-only
+          cp mkosi/verity.crt .build/delivery/staging-raws/verity-run.crt
+      - name: Upload the raws artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sysext-raws
+          path: .build/delivery/staging-raws/
+          retention-days: 7
+          if-no-files-found: error
+  integration:
+    name: Hypervisor integration tests
+    needs: producer
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/test.yml
+    with:
+      sysext_artifact: sysext-raws
+  publish:
+    name: Publish the signed release
+    needs: producer
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: recursive
+      - name: Download the sysext raws artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sysext-raws
+          path: .build/ci-sysext-hv/publish
+      - name: Check the signing secret
+        id: key
+        shell: bash
+        env:
+          SYSEXT_UNHARDENED_SIGNING_KEY: ${{ secrets.SYSEXT_UNHARDENED_SIGNING_KEY }}
+        run: |
+          if [ -n "${SYSEXT_UNHARDENED_SIGNING_KEY:-}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::no SYSEXT_UNHARDENED_SIGNING_KEY configured; skipping the release"
+          fi
+      - name: Regenerate the published inventory
+        if: steps.key.outputs.present == 'true'
+        shell: bash
+        working-directory: .build/ci-sysext-hv/publish
+        run: |
+          # The release carries data, not the boot-test vehicle.
+          rm -f sci-delivery.sh
+          test ! -e sci-delivery.sh || { echo "error: the published set still carries sci-delivery.sh" >&2; exit 1; }
+          find . -maxdepth 1 -type f ! -name SHA256SUMS ! -name 'SHA256SUMS.sig' -printf '%f\n' \
+            | LC_ALL=C sort | xargs sha256sum > SHA256SUMS
+          sha256sum -c -- SHA256SUMS
+      - name: Sign the published inventory
+        if: steps.key.outputs.present == 'true'
+        shell: bash
+        env:
+          SYSEXT_UNHARDENED_SIGNING_KEY: ${{ secrets.SYSEXT_UNHARDENED_SIGNING_KEY }}
+        run: |
+          signing_key="$RUNNER_TEMP/sysext-signing.key"
+          install -m 0600 /dev/null "$signing_key"
+          trap 'rm -f "$signing_key"' EXIT
+          printf '%s\n' "$SYSEXT_UNHARDENED_SIGNING_KEY" > "$signing_key"
+          openssl dgst -sha256 -sign "$signing_key" \
+            -out .build/ci-sysext-hv/publish/SHA256SUMS.sig \
+            .build/ci-sysext-hv/publish/SHA256SUMS
+          rm -f "$signing_key"
+      - name: Publish the release
+        if: steps.key.outputs.present == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          suite=$(sed -n 's/^Release=//p' mkosi/mkosi.conf | head -n 1)
+          tag="${suite}-g${GITHUB_SHA:0:7}"
+          gh release view "$tag" >/dev/null 2>&1 \
+            || gh release create "$tag" --target "$GITHUB_SHA" \
+              --title "$tag" --notes "SCI sysext artifacts for $tag"
+          gh release upload "$tag" .build/ci-sysext-hv/publish/* --clobber
+          gh release view "$tag" --json assets --jq '.assets[].name' | grep -qx 'SHA256SUMS.sig'
+          echo "published $tag: $(gh release view "$tag" --json url --jq .url)"

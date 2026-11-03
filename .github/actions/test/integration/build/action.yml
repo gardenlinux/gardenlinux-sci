@@ -2,13 +2,30 @@ name: build
 description: Build Bootable Virtual Machine Image
 inputs:
   image_tag:
-    description: "Image tag to use for the build"
-    required: true
+    description: "Image tag to use for the build (legacy mode)"
+    required: false
+    default: ""
+  mode:
+    description: "legacy: build the Garden Linux HV image; sysext: only prepare the Ubuntu guest"
+    required: false
+    default: "legacy"
+  sysext_key:
+    description: "Private test key prepared by prepare-sysext-hv.sh (sysext mode); its .pub is reused for the Ubuntu guest"
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
+    - name: Validate the test mode
+      if: ${{ inputs.mode != 'legacy' && inputs.mode != 'sysext' }}
+      shell: bash
+      run: |
+        echo "unsupported mode '${{ inputs.mode }}' (expected legacy or sysext)" >&2
+        exit 1
+
     # TODO https://github.com/actions/cache
     - name: Set ENV
+      if: ${{ inputs.mode != 'sysext' }}
       shell: bash
       env:
         REPO: ghcr.io/gardenlinux/gardenlinux-sci
@@ -22,6 +39,7 @@ runs:
         echo "DISK_SIZE=$DISK_SIZE" >> $GITHUB_ENV
 
     - name: Pull ORAS artifacts
+      if: ${{ inputs.mode != 'sysext' }}
       shell: bash
       run: |
         LAYERS=$(oras manifest fetch "$REPO:$TAG" | jq -r '.layers[]')
@@ -32,11 +50,13 @@ runs:
         oras blob fetch "$REPO@$TAR_SHA" -o "$RUNNER_TEMP/$TAG.tar" # wasteful, we only systemd-boot
 
     - name: Extract systemd-boot
+      if: ${{ inputs.mode != 'sysext' }}
       shell: bash
       run: |
         tar -xf "$RUNNER_TEMP/$TAG.tar" --no-same-owner --strip-components=5 -C "$RUNNER_TEMP" usr/lib/systemd/boot/efi/systemd-bootx64.efi
 
     - name: Set up a raw disk image
+      if: ${{ inputs.mode != 'sysext' }}
       shell: bash
       run: |
         ESP_END="${ESP_SIZE}GiB"
@@ -62,6 +82,7 @@ runs:
         sudo mkfs.ext4 "$VAR_PART" -L VAR
 
     - name: Populate the ESP partition
+      if: ${{ inputs.mode != 'sysext' }}
       shell: bash
       run: |
         mkdir -p "$RUNNER_TEMP/esp"
@@ -88,25 +109,39 @@ runs:
         sudo losetup -d "$LOOPDEV"
 
     - name: Convert to QCOW2
+      if: ${{ inputs.mode != 'sysext' }}
       shell: bash
       run: |
         qemu-img convert -O qcow2 "$DISK_IMG" "/opt/${TAG}.qcow2"
 
+    - name: Generate test SSH key and password
+      shell: bash
+      env:
+        SYSEXT_KEY: ${{ inputs.sysext_key }}
+      run: |
+        if [ -n "$SYSEXT_KEY" ]; then
+          # One key for the HVs and the Ubuntu guests.
+          install -m 600 "$SYSEXT_KEY" /opt/ssh_host_ed25519_key
+          install -m 644 "$SYSEXT_KEY.pub" /opt/ssh_host_ed25519_key.pub
+        else
+          ssh-keygen -t ed25519 -f "/opt/ssh_host_ed25519_key" -N "" -C "user" -q
+          chmod 600 /opt/ssh_host_ed25519_key
+        fi
+        SSH_KEY=$(cat /opt/ssh_host_ed25519_key.pub)
+        PASSWORD=$(openssl passwd "password")
+        echo "SSH_KEY=$SSH_KEY" >> $GITHUB_ENV
+        echo "PASSWORD=$PASSWORD" >> $GITHUB_ENV
+
     - name: Generate ignition
+      if: ${{ inputs.mode != 'sysext' }}
       shell: bash
       run: |
-        ssh-keygen -t ed25519 -f "/opt/ssh_host_ed25519_key" -N "" -C "user" -q
-        chmod 600 /opt/ssh_host_ed25519_key
-        SSH_KEY=$(cat /opt/ssh_host_ed25519_key.pub)
-        echo "SSH_KEY=$SSH_KEY" >> $GITHUB_ENV
         cp ./.github/actions/test/integration/build/dev-user-butane.yaml ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
         yq '.storage.files += load("./.github/actions/test/integration/build/root-hints.yaml")' ./.github/actions/test/integration/build/dev-user-butane.yaml > ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
 
         sed -i "s|SSH_KEY_GOES_HERE|$SSH_KEY|g" ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
         sed -i "s|SSH_KEY_GOES_HERE|$SSH_KEY|g" ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
 
-        PASSWORD=$(openssl passwd "password")
-        echo "PASSWORD=$PASSWORD" >> $GITHUB_ENV
         sed -i "s|PASSWORD_GOES_HERE|$PASSWORD|g" ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
         sed -i "s|PASSWORD_GOES_HERE|$PASSWORD|g" ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
         sed -i "s|TAG_GOES_HERE|${{ inputs.image_tag }}|g" ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
