@@ -1,0 +1,5 @@
+# sha256 of .build/mkosi/tools/mkosi.tools.manifest (the tools-tree package list).
+# Check: extensions/tests/test_artifact_contracts.py and the bootstrap in mkosi/build.sh.
+# Update after a deliberate toolchain change, in the same commit:
+#   sha256sum .build/mkosi/tools/mkosi.tools.manifest
+e237010427d95883b5791c5549feb434a8b993d566b64546eeba4e585725f49d

@@ -1,0 +1,4 @@
+# Resolved mkosi configuration pin, sha256 of the normalized `mkosi summary --json`.
+# Check: extensions/tests/test_artifact_contracts.py; normalizer: extensions/tests/summary.py.
+# Update in the same commit as the config or mkosi change (commands: summary.py).
+f34540c51c82477fc8943108ea8963eac8e82e31b772347f3e9d6517938c2178

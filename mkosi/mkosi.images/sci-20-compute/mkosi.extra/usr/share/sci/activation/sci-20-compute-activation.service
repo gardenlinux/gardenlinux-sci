@@ -1,0 +1,13 @@
+[Unit]
+Description=SCI compute identities activation (delivery-time users and state dirs)
+After=systemd-sysext.service
+Wants=systemd-sysext.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/systemd-sysusers
+ExecStart=/usr/bin/systemd-tmpfiles --create
+
+[Install]
+WantedBy=multi-user.target

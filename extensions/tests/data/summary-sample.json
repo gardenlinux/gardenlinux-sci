@@ -1,0 +1,43 @@
+{
+  "Images": [
+    {
+      "Architecture": "x86-64",
+      "BaseTrees": [
+        "/repo/.build/mkosi/base-image/current",
+        "/repo/mkosi/mkosi.images/sci-libvirt"
+      ],
+      "Distribution": "gardenlinux",
+      "Format": "sysext",
+      "Image": "sci-base",
+      "Note": "h\u00e9llo w\u00f6rld \u2713",
+      "Output": "/repo/.build/mkosi/output/sci-base.raw",
+      "Packages": [
+        "conntrack",
+        "parted"
+      ],
+      "Release": "2150.9.0",
+      "Seed": "8b7f2b0e-9c4a-4a1e-9a55-0c3d2e1f6a77",
+      "Scale": 1.5,
+      "SourceDateEpoch": 1771372800,
+      "Tags": []
+    },
+    {
+      "Architecture": "x86-64",
+      "Distribution": "gardenlinux",
+      "Flag": true,
+      "Format": "disk",
+      "Image": "main",
+      "Output": "/var/tmp/machine-local/main.raw",
+      "RepoRoot": "/repo",
+      "Release": "2150.9.0",
+      "Settings": {
+        "CaBundle": "/etc/ssl/certs/ca-certificates.crt",
+        "Empty": {},
+        "Relative": "mkosi.conf",
+        "Value": null
+      },
+      "SourceDateEpoch": 1771372800
+    }
+  ],
+  "Version": "27.1"
+}

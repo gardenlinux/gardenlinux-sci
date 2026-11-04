@@ -12,6 +12,11 @@ runs:
         IP_HV1="192.168.122.2"
         IP_HV2="192.168.122.3"
 
+        # The qemu scenario's migrated VM still runs on HV2. Its nested I/O
+        # starves the staging copy: the destination HV froze ~2h into the
+        # ubuntu.raw transfer while idle HV1 takes the same copy in seconds.
+        ssh $SSH_OPTS "$USER@$IP_HV2" 'virsh destroy VM-QEMU >/dev/null 2>&1 || true; virsh undefine VM-QEMU >/dev/null 2>&1 || true' || true
+
         scp $SSH_OPTS ./.github/actions/test/integration/test/cloudhypervisor/vm.xml "$USER@$IP_HV1:/opt/vm-chv.xml"
         scp $SSH_OPTS /opt/ubuntu.raw "$USER@$IP_HV1:/var/lib/libvirt/images/ubuntu.raw"
         scp $SSH_OPTS /opt/ubuntu-cloud-init-ds.iso "$USER@$IP_HV1:/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso"
@@ -82,7 +87,7 @@ runs:
               exit 1
             fi
             echo "Waiting for VM to respond to SSH... (\$i/\$MAX_ITER)"
-            sleep 10
+            sleep 60
           done
         EOF
 
@@ -154,6 +159,6 @@ runs:
               exit 1
             fi
             echo "Waiting for VM to respond to SSH... (\$i/\$MAX_ITER)"
-            sleep 10
+            sleep 60
           done
         EOF

@@ -1,9 +1,27 @@
 name: setup
 description: Set up Hypervisor and VM Environment for Integration Tests
+inputs:
+  mode:
+    description: "legacy: Garden Linux image + ignition; sysext: published base + delivery container"
+    required: false
+    default: "legacy"
+  hv_dir:
+    description: "Output of prepare-sysext-hv.sh --prepare (sysext mode)"
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
+    - name: Validate the test mode
+      if: ${{ inputs.mode != 'legacy' && inputs.mode != 'sysext' }}
+      shell: bash
+      run: |
+        echo "unsupported mode '${{ inputs.mode }}' (expected legacy or sysext)" >&2
+        exit 1
+
+    # ---- legacy path ------------------------------------------------------
     - name: Configure the default libvirt network
+      if: ${{ inputs.mode != 'sysext' }}
       shell: bash
       run: |
         sudo virsh net-destroy default
@@ -13,12 +31,14 @@ runs:
         sudo virsh net-autostart default
 
     - name: Copy ignition file
+      if: ${{ inputs.mode != 'sysext' }}
       shell: bash
       run: |
         sudo cp "/opt/${TAG}-hv1.ign" /var/lib/libvirt/images/HV1.ign
         sudo cp "/opt/${TAG}-hv2.ign" /var/lib/libvirt/images/HV2.ign
 
     - name: Create HyperVisor 1
+      if: ${{ inputs.mode != 'sysext' }}
       shell: bash
       run: |
         cp ./.github/actions/test/integration/setup/hv.xml ./.github/actions/test/integration/setup/hv1.xml
@@ -30,6 +50,7 @@ runs:
         sudo virsh start HV1
 
     - name: Create HyperVisor 2
+      if: ${{ inputs.mode != 'sysext' }}
       shell: bash
       run: |
         cp ./.github/actions/test/integration/setup/hv.xml ./.github/actions/test/integration/setup/hv2.xml
@@ -41,6 +62,7 @@ runs:
         sudo virsh start HV2
 
     - name: Configure SSH and libvirt on HyperVisors
+      if: ${{ inputs.mode != 'sysext' }}
       shell: bash
       run: |
         KEY=/opt/ssh_host_ed25519_key
@@ -110,3 +132,72 @@ runs:
 
         wait_for_ssh HV1
         wait_for_ssh HV2
+
+    # ---- sysext path ------------------------------------------------------
+    - name: Boot the sysext HyperVisors and run the delivery container
+      if: ${{ inputs.mode == 'sysext' }}
+      shell: bash
+      env:
+        HV_DIR: ${{ inputs.hv_dir }}
+      run: |
+        set -Eeuo pipefail
+        [ -n "$HV_DIR" ] && [ -f "$HV_DIR/metadata.env" ] || { echo "hv_dir with metadata.env is required in sysext mode" >&2; exit 1; }
+        source "$HV_DIR/metadata.env"
+        KEY=$HV_DIR/hv-test-key
+        SSH="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        for f in "$KEY" "$HV_KERNEL" "$HV_ARTIFACT_TAR" "$HV_DIR/sci-delivery.ref" "$HV_DIR/HV1.xml" "$HV_DIR/HV2.xml" "$HV_DIR/disks/HV1.qcow2" "$HV_DIR/disks/HV2.qcow2"; do
+          [ -s "$f" ] || { echo "missing prepared artifact: $f" >&2; exit 1; }
+        done
+        [ -n "$HV_ARTIFACT_REF" ] || { echo "empty delivery image reference" >&2; exit 1; }
+        sudo virsh net-info default >/dev/null || { echo "the libvirt default network is not active; sysext mode does not create it" >&2; exit 1; }
+        # The runner home ships as 750; qemu must traverse it to reach the disks.
+        sudo chmod o+x "$HOME"
+        add_host() { sudo virsh net-dumpxml default | grep -q "mac='$1'" || sudo virsh net-update default add ip-dhcp-host "<host mac='$1' ip='$2' name='$3'/>" --live --config; }
+        add_host 52:54:00:12:34:56 192.168.122.2 hv1
+        add_host 52:54:00:65:43:21 192.168.122.3 hv2
+        for spec in "HV1 192.168.122.2" "HV2 192.168.122.3"; do
+          set -- $spec
+          sudo virsh dominfo "$1" >/dev/null 2>&1 && { echo "refusing to replace a pre-existing domain: $1" >&2; exit 1; }
+          sudo virsh define "$HV_DIR/$1.xml"
+          sudo virsh start "$1" || { namei -l "$HV_DIR/disks/$1.qcow2" >&2 || true; exit 1; }
+          for ((t=1; t<=60; t++)); do
+            ssh $SSH "root@$2" true 2>/dev/null && break
+            [ "$t" -lt 60 ] || { echo "timeout waiting for $1 to respond to SSH" >&2; sudo cat "/var/log/$1.log" || true; exit 1; }
+            sleep 5
+          done
+          scp -q $SSH "$KEY" "root@$2:/opt/ssh_host_ed25519_key"
+          scp -q $SSH "$HV_ARTIFACT_TAR" "root@$2:/opt/sci-delivery.tar"
+          scp -q $SSH "$HV_DIR/sci-delivery.ref" "root@$2:/opt/sci-delivery.ref"
+          scp -q $SSH ./.github/actions/test/integration/setup/virbr-vm.xml "root@$2:/opt/virbr-vm.xml"
+          ssh $SSH "root@$2" bash -s <<'EOF'
+        set -Eeuo pipefail
+        chmod 700 /root/.ssh
+        chmod 600 /opt/ssh_host_ed25519_key
+        systemctl is-active containerd.service >/dev/null || systemctl start containerd.service
+        REF=$(head -n 1 /opt/sci-delivery.ref)
+        test -n "$REF"
+        ctr -n k8s.io images import /opt/sci-delivery.tar
+        rm -f /opt/sci-delivery.tar
+        ctr -n k8s.io container rm -f sci-delivery >/dev/null 2>&1 || true
+        # hostIPC is required: systemd-sysext waits on a dm-verity udev cookie
+        # posted by the host udevd, so join PID 1's IPC namespace.
+        ctr -n k8s.io run --rm --privileged --with-ns pid:/proc/1/ns/pid \
+          --with-ns ipc:/proc/1/ns/ipc \
+          --env HOST_ROOT=/host --env INTERVAL=0 --env NSENTER=1 \
+          --mount type=bind,src=/,dst=/host,options=rbind:rw \
+          "$REF" sci-delivery < /dev/null
+        systemd-sysext status
+        systemctl is-active libvirtd.service
+        mkdir -p /var/log/libvirt/ch
+        printf 'Host 192.168.122.*\n    StrictHostKeyChecking no\n    UserKnownHostsFile /dev/null\n    IdentityFile /opt/ssh_host_ed25519_key\n    IdentitiesOnly yes\n    User root\n' > /root/.ssh/config
+        chmod 600 /root/.ssh/config /opt/ssh_host_ed25519_key
+        virsh pool-destroy default || true
+        virsh pool-undefine default || true
+        virsh pool-define-as default dir --target /var/lib/libvirt/images
+        virsh pool-build default; virsh pool-start default; virsh pool-autostart default
+        virsh net-destroy default || true
+        virsh net-undefine default || true
+        virsh net-define /opt/virbr-vm.xml
+        virsh net-start default; virsh net-autostart default
+        EOF
+        done

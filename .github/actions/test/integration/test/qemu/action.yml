@@ -17,7 +17,9 @@ runs:
         scp $SSH_OPTS /opt/ubuntu-cloud-init-ds.iso "$USER@$IP_HV1:/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso"
 
         # the cloud-init data is not migrated from source to destination, but needed for the VM to run at the destination
+        # the disk itself must already exist at the destination, because --copy-storage-all does not create it
         scp $SSH_OPTS /opt/ubuntu-cloud-init-ds.iso "$USER@$IP_HV2:/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso"
+        scp $SSH_OPTS /opt/ubuntu.qcow2 "$USER@$IP_HV2:/var/lib/libvirt/images/ubuntu.qcow2"
 
     - name: Start VM on HyperVisor 1
       shell: bash
@@ -80,7 +82,7 @@ runs:
               exit 1
             fi
             echo "Waiting for VM to respond to SSH... (\$i/\$MAX_ITER)"
-            sleep 10
+            sleep 60
           done
         EOF
 
@@ -152,6 +154,6 @@ runs:
               exit 1
             fi
             echo "Waiting for VM to respond to SSH... (\$i/\$MAX_ITER)"
-            sleep 10
+            sleep 60
           done
         EOF
