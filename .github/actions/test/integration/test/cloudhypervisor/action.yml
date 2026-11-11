@@ -47,7 +47,7 @@ runs:
           SSH_OPTS="-i \$KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
           USER="root"
 
-          MAX_ITER=60
+          MAX_ITER="${BOOT_MAX_ITER:-60}"
           for ((i=1; i<=MAX_ITER; i++)); do
             IP=\$(virsh -c ch:///session domifaddr VM-CHV | awk '/ipv4/ {print \$4}' | cut -d'/' -f1)
             if [ -z "\$IP" ]; then
@@ -128,7 +128,7 @@ runs:
           # the IP is static, so we can just use it directly
           IP="192.168.222.3"
 
-          MAX_ITER=15
+          MAX_ITER="${VERIFY_MAX_ITER:-15}"
           for ((i=1; i<=MAX_ITER; i++)); do
             if ssh \$SSH_OPTS "\$USER@\$IP" 'exit' 2>/dev/null; then
               echo "VM is up at IP: \$IP"
