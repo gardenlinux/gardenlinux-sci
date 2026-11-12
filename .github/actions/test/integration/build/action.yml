@@ -127,9 +127,7 @@ runs:
 
         render_hv() {
           local name=$1 mac=$2
-          sed -e "s|HV_NAME_GOES_HERE|$name|g" \
-              -e "s|MAC_GOES_HERE|$mac|g" \
-              < ./.github/actions/test/integration/setup/hv.xml > "$HV_DIR/$name.xml"
+          HV_NAME=$name MAC=$mac envsubst '${HV_NAME} ${MAC}' < ./.github/actions/test/integration/setup/hv.xml > "$HV_DIR/$name.xml"
         }
         render_hv HV1 52:54:00:12:34:56
         render_hv HV2 52:54:00:65:43:21
