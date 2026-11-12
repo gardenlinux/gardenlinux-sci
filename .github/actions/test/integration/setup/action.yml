@@ -1,8 +1,42 @@
 name: setup
 description: Set up Hypervisor and VM Environment for Integration Tests
+inputs:
+  hv_dir:
+    description: "Prepared HyperVisor directory: metadata.env, HV1.xml, HV2.xml"
+    required: true
 runs:
   using: "composite"
   steps:
+    - name: Validate the HyperVisor preparation
+      shell: bash
+      env:
+        HV_DIR_INPUT: ${{ inputs.hv_dir }}
+      run: |
+        if [ -z "$HV_DIR_INPUT" ]; then
+          echo "hv_dir is required" >&2
+          exit 1
+        fi
+        if [ ! -f "$HV_DIR_INPUT/metadata.env" ]; then
+          echo "hv_dir carries no metadata.env: $HV_DIR_INPUT" >&2
+          exit 1
+        fi
+        . "$HV_DIR_INPUT/metadata.env"
+
+        if [ -z "${HV_DIR:-}" ] || [ ! -d "$HV_DIR" ]; then
+          echo "metadata.env does not name a HyperVisor directory: ${HV_DIR:-}" >&2
+          exit 1
+        fi
+        if [ -z "${HV_SSH_KEY:-}" ] || [ ! -s "$HV_SSH_KEY" ]; then
+          echo "metadata.env does not name a usable SSH key: ${HV_SSH_KEY:-}" >&2
+          exit 1
+        fi
+        for f in "$HV_DIR/HV1.xml" "$HV_DIR/HV2.xml"; do
+          if [ ! -s "$f" ]; then
+            echo "missing prepared HyperVisor XML: $f" >&2
+            exit 1
+          fi
+        done
+
     - name: Configure the default libvirt network
       shell: bash
       run: |
@@ -12,38 +46,22 @@ runs:
         sudo virsh net-start default
         sudo virsh net-autostart default
 
-    - name: Copy ignition file
-      shell: bash
-      run: |
-        sudo cp "/opt/${TAG}-hv1.ign" /var/lib/libvirt/images/HV1.ign
-        sudo cp "/opt/${TAG}-hv2.ign" /var/lib/libvirt/images/HV2.ign
-
     - name: Create HyperVisor 1
       shell: bash
       run: |
-        cp ./.github/actions/test/integration/setup/hv.xml ./.github/actions/test/integration/setup/hv1.xml
-        sed -i "s|HV_NAME_GOES_HERE|HV1|g" ./.github/actions/test/integration/setup/hv1.xml
-        sed -i "s|MAC_GOES_HERE|52:54:00:12:34:56|g" ./.github/actions/test/integration/setup/hv1.xml
-        sudo cp "/opt/${TAG}.qcow2" /var/lib/libvirt/images/HV1.qcow2
-
-        sudo virsh define ./.github/actions/test/integration/setup/hv1.xml
+        sudo virsh define "$HV_DIR/HV1.xml"
         sudo virsh start HV1
 
     - name: Create HyperVisor 2
       shell: bash
       run: |
-        cp ./.github/actions/test/integration/setup/hv.xml ./.github/actions/test/integration/setup/hv2.xml
-        sed -i "s|HV_NAME_GOES_HERE|HV2|g" ./.github/actions/test/integration/setup/hv2.xml
-        sed -i "s|MAC_GOES_HERE|52:54:00:65:43:21|g" ./.github/actions/test/integration/setup/hv2.xml
-        sudo cp "/opt/${TAG}.qcow2" /var/lib/libvirt/images/HV2.qcow2
-
-        sudo virsh define ./.github/actions/test/integration/setup/hv2.xml
+        sudo virsh define "$HV_DIR/HV2.xml"
         sudo virsh start HV2
 
     - name: Configure SSH and libvirt on HyperVisors
       shell: bash
       run: |
-        KEY=/opt/ssh_host_ed25519_key
+        KEY=$HV_SSH_KEY
         SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
         USER="root"
         MAX_ITER=30

@@ -45,6 +45,8 @@ jobs:
           image_tag: ${{ inputs.image_tag }}
       - name: Setup
         uses: ./.github/actions/test/integration/setup
+        with:
+          hv_dir: ${{ env.HV_DIR }}
       - name: Test QEMU
         uses: ./.github/actions/test/integration/test/qemu
       - name: Test CloudHypervisor

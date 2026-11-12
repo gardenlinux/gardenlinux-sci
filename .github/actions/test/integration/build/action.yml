@@ -92,21 +92,17 @@ runs:
       run: |
         qemu-img convert -O qcow2 "$DISK_IMG" "/opt/${TAG}.qcow2"
 
+    - name: Build the guest and the shared test SSH key
+      uses: ./.github/actions/test/integration/guest
     - name: Generate ignition
       shell: bash
       run: |
-        ssh-keygen -t ed25519 -f "/opt/ssh_host_ed25519_key" -N "" -C "user" -q
-        chmod 600 /opt/ssh_host_ed25519_key
-        SSH_KEY=$(cat /opt/ssh_host_ed25519_key.pub)
-        echo "SSH_KEY=$SSH_KEY" >> $GITHUB_ENV
         cp ./.github/actions/test/integration/build/dev-user-butane.yaml ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
         yq '.storage.files += load("./.github/actions/test/integration/build/root-hints.yaml")' ./.github/actions/test/integration/build/dev-user-butane.yaml > ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
 
         sed -i "s|SSH_KEY_GOES_HERE|$SSH_KEY|g" ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
         sed -i "s|SSH_KEY_GOES_HERE|$SSH_KEY|g" ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
 
-        PASSWORD=$(openssl passwd "password")
-        echo "PASSWORD=$PASSWORD" >> $GITHUB_ENV
         sed -i "s|PASSWORD_GOES_HERE|$PASSWORD|g" ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
         sed -i "s|PASSWORD_GOES_HERE|$PASSWORD|g" ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
         sed -i "s|TAG_GOES_HERE|${{ inputs.image_tag }}|g" ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
@@ -115,22 +111,34 @@ runs:
         butane --pretty --strict ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml > "/opt/${TAG}-hv1.ign"
         butane --pretty --strict ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml > "/opt/${TAG}-hv2.ign"
 
-    - name: Download ubuntu cloud image
+    - name: Prepare the HyperVisor directory
       shell: bash
       run: |
-        wget -q "https://cloud-images.ubuntu.com/minimal/releases/noble/release/ubuntu-24.04-minimal-cloudimg-amd64.img" -O /opt/ubuntu.qcow2
+        set -Eeuo pipefail
+        HV_DIR=/opt/hv
+        KEY=/opt/ssh_host_ed25519_key
+        [ -s "$KEY" ] || { echo "the shared test SSH key is missing: $KEY" >&2; exit 1; }
 
-    - name: Generate raw ubuntu image for CHV
-      shell: bash
-      run: |
-        qemu-img convert -p -f qcow2 -O raw /opt/ubuntu.qcow2 /opt/ubuntu.raw
+        install -d "$HV_DIR" "$HV_DIR/disks"
+        sudo install -m 0644 "/opt/${TAG}.qcow2" /var/lib/libvirt/images/HV1.qcow2
+        sudo install -m 0644 "/opt/${TAG}.qcow2" /var/lib/libvirt/images/HV2.qcow2
+        sudo install -m 0644 "/opt/${TAG}-hv1.ign" /var/lib/libvirt/images/HV1.ign
+        sudo install -m 0644 "/opt/${TAG}-hv2.ign" /var/lib/libvirt/images/HV2.ign
 
-    - name: Generate ubuntu cloud-init
-      shell: bash
-      run: |
-        sed -i "s|SSH_KEY_GOES_HERE|$SSH_KEY|g" ./.github/actions/test/integration/build/user-data
-        sed -i "s|PASSWORD_GOES_HERE|$PASSWORD|g" ./.github/actions/test/integration/build/user-data
-        genisoimage -output /opt/ubuntu-cloud-init-ds.iso -volid cidata -joliet -rock ./.github/actions/test/integration/build/meta-data ./.github/actions/test/integration/build/user-data
+        render_hv() {
+          local name=$1 mac=$2
+          sed -e "s|HV_NAME_GOES_HERE|$name|g" \
+              -e "s|MAC_GOES_HERE|$mac|g" \
+              < ./.github/actions/test/integration/setup/hv.xml > "$HV_DIR/$name.xml"
+        }
+        render_hv HV1 52:54:00:12:34:56
+        render_hv HV2 52:54:00:65:43:21
+
+        cat > "$HV_DIR/metadata.env" <<EOF
+        HV_DIR=$HV_DIR
+        HV_SSH_KEY=/opt/ssh_host_ed25519_key
+        EOF
+        cat "$HV_DIR/metadata.env" >> "$GITHUB_ENV"
 
     # - name: Upload artifacts
     #   uses: actions/upload-artifact@v4
