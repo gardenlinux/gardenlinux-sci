@@ -40,11 +40,26 @@ runs:
     - name: Configure the default libvirt network
       shell: bash
       run: |
-        sudo virsh net-destroy default
-        sudo virsh net-undefine default
-        sudo virsh net-define ./.github/actions/test/integration/setup/virbr-hv.xml
-        sudo virsh net-start default
-        sudo virsh net-autostart default
+        NETWORK=${HV_NETWORK:-default}
+
+        # virsh net-info also succeeds for a defined network that is inactive,
+        # so decide on its Active field, not on the exit status alone.
+        if ! net_info=$(sudo virsh net-info "$NETWORK" 2>/dev/null); then
+          [ "$NETWORK" = default ] \
+            || { echo "the libvirt network $NETWORK does not exist; only default may be defined from virbr-hv.xml" >&2; exit 1; }
+          sudo virsh net-define ./.github/actions/test/integration/setup/virbr-hv.xml
+          sudo virsh net-start "$NETWORK"
+        else
+          active=$(printf '%s\n' "$net_info" | awk '$1 == "Active:" { print $2 }')
+          [ -n "$active" ] \
+            || { echo "cannot read the Active state of the libvirt network $NETWORK" >&2; exit 1; }
+          if [ "$active" = no ]; then
+            sudo virsh net-start "$NETWORK"
+          elif [ "$active" != yes ]; then
+            echo "unexpected Active state '$active' for the libvirt network $NETWORK" >&2
+            exit 1
+          fi
+        fi
 
     - name: Create HyperVisor 1
       shell: bash
