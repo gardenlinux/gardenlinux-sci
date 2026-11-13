@@ -134,3 +134,8 @@ runs:
             sleep 10
           done
         EOF
+
+    - name: Stop the migrated guest
+      shell: bash
+      run: |
+        ssh 192.168.122.3 'virsh destroy VM-QEMU >/dev/null 2>&1 || true; virsh undefine VM-QEMU >/dev/null 2>&1 || true'

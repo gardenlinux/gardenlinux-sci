@@ -16,6 +16,7 @@ runs:
           libvirt-clients \
           virtinst \
           bridge-utils \
+          virtiofsd \
           ovmf
 
     # Required for storing the ignition file in /var/lib/libvirt/images
@@ -25,6 +26,12 @@ runs:
         sudo sed -i '/^[#[:space:]]*security_driver[[:space:]]*=/d' /etc/libvirt/qemu.conf
         echo 'security_driver = "none"' | sudo tee -a /etc/libvirt/qemu.conf
         sudo systemctl restart libvirtd
+
+    # The libvirt qemu user must reach /dev/kvm for the hypervisor VMs.
+    - name: Make /dev/kvm accessible
+      shell: bash
+      run: |
+        if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
 
     - name: oras
       uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2
