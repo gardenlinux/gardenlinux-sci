@@ -10,11 +10,11 @@
     <cpu mode='host-passthrough' check='none' migratable='on' />
     <devices>
         <disk type='file' device='disk'>
-            <source file='/var/lib/libvirt/images/ubuntu.raw' />
+            <source file='/var/lib/libvirt/images/cirros.raw' />
             <target dev='hda' bus='virtio' />
         </disk>
         <disk type='file' device='cdrom'>
-            <source file='/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso' />
+            <source file='/var/lib/libvirt/images/cirros-cloud-init-ds.iso' />
             <target dev='hdb' bus='virtio' />
             <readonly />
         </disk>
