@@ -1,0 +1,38 @@
+name: guest
+description: Build the Ubuntu test guest and the shared test SSH identity
+runs:
+  using: "composite"
+  steps:
+    - name: Generate test SSH key and password
+      shell: bash
+      run: |
+        ssh-keygen -t ed25519 -f "/opt/ssh_host_ed25519_key" -N "" -C "user" -q
+        chmod 600 /opt/ssh_host_ed25519_key
+        SSH_KEY=$(cat /opt/ssh_host_ed25519_key.pub)
+        echo "SSH_KEY=$SSH_KEY" >> $GITHUB_ENV
+        PASSWORD=$(openssl passwd "password")
+        echo "PASSWORD=$PASSWORD" >> $GITHUB_ENV
+
+    - name: Download ubuntu cloud image
+      shell: bash
+      run: |
+        wget -q "https://cloud-images.ubuntu.com/minimal/releases/noble/release/ubuntu-24.04-minimal-cloudimg-amd64.img" -O /opt/ubuntu.qcow2
+
+    - name: Generate raw ubuntu image for CHV
+      shell: bash
+      run: |
+        qemu-img convert -p -f qcow2 -O raw /opt/ubuntu.qcow2 /opt/ubuntu.raw
+
+    - name: Generate ubuntu cloud-init
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        : "${SSH_KEY:?the shared test SSH key is not set}"
+        : "${PASSWORD:?the guest password is not set}"
+
+        RENDER_DIR=$(mktemp -d)
+        trap 'rm -rf "$RENDER_DIR"' EXIT
+        envsubst '${SSH_KEY} ${PASSWORD}' \
+          < ./.github/actions/test/integration/guest/user-data \
+          > "$RENDER_DIR/user-data"
+        genisoimage -output /opt/ubuntu-cloud-init-ds.iso -volid cidata -joliet -rock ./.github/actions/test/integration/guest/meta-data "$RENDER_DIR/user-data"
