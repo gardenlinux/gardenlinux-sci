@@ -1,7 +1,7 @@
 <domain type='kvm'>
     <name>VM-CHV</name>
     <memory unit='GiB'>2</memory>
-    <vcpu placement='static'>1</vcpu>
+    <vcpu placement='static'>2</vcpu>
     <os>
         <type arch='x86_64' machine='pc'>hvm</type>
         <!-- see https://github.com/cloud-hypervisor/rust-hypervisor-firmware/issues/382 -->
