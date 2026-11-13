@@ -16,6 +16,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-24.04
+    env:
+      BOOT_MAX_ITER: 360   # 60 min at 10 s per poll
+      VERIFY_MAX_ITER: 90  # 15 min at 10 s per poll
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -46,8 +49,10 @@ jobs:
       - name: Setup
         uses: ./.github/actions/test/integration/setup
       - name: Test QEMU
+        timeout-minutes: 120
         uses: ./.github/actions/test/integration/test/qemu
       - name: Test CloudHypervisor
+        timeout-minutes: 180
         uses: ./.github/actions/test/integration/test/cloudhypervisor
       - name: Collect Debug Logs
         if: always()

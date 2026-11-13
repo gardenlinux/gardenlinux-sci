@@ -3,6 +3,26 @@ description: Set up Hypervisor and VM Environment for Integration Tests
 runs:
   using: "composite"
   steps:
+    - name: Write the shared SSH configuration
+      shell: bash
+      run: |
+        # The boot step below copies the key to this path; the later steps
+        # rely on the matching Host block instead of repeating the options.
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        cat > ~/.ssh/config <<'EOF'
+        Host 192.168.122.* 192.168.222.*
+          IdentityFile /opt/ssh_host_ed25519_key
+          IdentitiesOnly yes
+          StrictHostKeyChecking no
+          UserKnownHostsFile /dev/null
+          ConnectTimeout 10
+          ServerAliveInterval 15
+          ServerAliveCountMax 4
+          User root
+        EOF
+        chmod 600 ~/.ssh/config
+
     - name: Configure the default libvirt network
       shell: bash
       run: |
@@ -49,32 +69,23 @@ runs:
     - name: Configure SSH and libvirt on HyperVisors
       shell: bash
       run: |
-        KEY=/opt/ssh_host_ed25519_key
-        SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        USER="root"
         MAX_ITER=30
 
         setup_hv() {
           local IP="$1"
 
           # Configure SSH between HyperVisors
-          scp $SSH_OPTS /opt/ssh_host_ed25519_key "$USER@$IP:/opt/ssh_host_ed25519_key"
-          ssh $SSH_OPTS "$USER@$IP" << EOF
+          scp /opt/ssh_host_ed25519_key "$IP:/opt/ssh_host_ed25519_key"
+          scp "$HOME/.ssh/config" "$IP:/root/.ssh/config"
+          ssh "$IP" << EOF
             chmod 700 /root/.ssh
-            echo "" > /root/.ssh/config
-            echo "Host 192.168.122.*" >> /root/.ssh/config
-            echo "    StrictHostKeyChecking no" >> /root/.ssh/config
-            echo "    UserKnownHostsFile /dev/null" >> /root/.ssh/config
-            echo "    IdentityFile /opt/ssh_host_ed25519_key" >> /root/.ssh/config
-            echo "    IdentitiesOnly yes" >> /root/.ssh/config
-            echo "    User root" >> /root/.ssh/config
             chmod 600 /root/.ssh/config
             chmod 600 /opt/ssh_host_ed25519_key
         EOF
 
           # Set up libvirt storage pool and network
-          scp $SSH_OPTS ./.github/actions/test/integration/setup/virbr-vm.xml "$USER@$IP:/opt/virbr-vm.xml"
-          ssh $SSH_OPTS "$USER@$IP" << EOF
+          scp ./.github/actions/test/integration/setup/virbr-vm.xml "$IP:/opt/virbr-vm.xml"
+          ssh "$IP" << EOF
             systemctl start libvirtd
 
             virsh pool-destroy default || true
@@ -99,7 +110,7 @@ runs:
             local IP=$(sudo virsh domifaddr "$VM_NAME" | awk '/ipv4/ {print $4}' | cut -d'/' -f1)
             if [ -z "$IP" ]; then
               echo "No IP address found for $VM_NAME. Retrying..."
-            elif ssh $SSH_OPTS "$USER@$IP" 'exit' 2>/dev/null; then
+            elif ssh "$IP" 'exit' 2>/dev/null; then
               echo "$VM_NAME is up at IP: $IP"
               setup_hv "$IP"
               break
