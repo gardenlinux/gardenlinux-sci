@@ -23,9 +23,17 @@ runs:
         EOF
         chmod 600 ~/.ssh/config
 
-    - name: Configure the default libvirt network
+    - name: Boot the HyperVisors and configure the guests
       shell: bash
       run: |
+        set -Eeuo pipefail
+        HV_DIR=/opt/hv
+        KEY=/opt/ssh_host_ed25519_key
+        [ -s "$KEY" ] && [ -f "$KEY" ] \
+          || { echo "the shared test SSH key is missing: $KEY" >&2; exit 1; }
+        [ -s "$HV_DIR/HV1.xml" ] && [ -s "$HV_DIR/HV2.xml" ] \
+          || { echo "the hypervisor directory lacks HV1.xml or HV2.xml: $HV_DIR" >&2; exit 1; }
+
         NETWORK=${HV_NETWORK:-default}
 
         # virsh net-info also succeeds for a defined network that is inactive,
@@ -46,9 +54,6 @@ runs:
             exit 1
           fi
         fi
-
-        # virbr-hv.xml carries the two reservations, but a pre-existing network
-        # was never defined from it. Restore them by MAC, so a rerun adds none.
         add_host() {
           sudo virsh net-dumpxml "$NETWORK" | grep -q "mac='$1'" \
             || sudo virsh net-update "$NETWORK" add ip-dhcp-host "<host mac='$1' ip='$2' name='$3'/>" --live --config
@@ -56,98 +61,37 @@ runs:
         add_host 52:54:00:12:34:56 192.168.122.2 hv1
         add_host 52:54:00:65:43:21 192.168.122.3 hv2
 
-    - name: Copy ignition file
-      shell: bash
-      run: |
-        set -Eeuo pipefail
-        : "${TAG:?the image tag is not set}"
-        sudo cp "/opt/${TAG}-hv1.ign" /var/lib/libvirt/images/HV1.ign
-        sudo cp "/opt/${TAG}-hv2.ign" /var/lib/libvirt/images/HV2.ign
+        # The runner home ships as 750; qemu must traverse it to reach the disks.
+        sudo chmod o+x "$HOME"
 
-    - name: Create HyperVisor 1
-      shell: bash
-      run: |
-        set -Eeuo pipefail
-        : "${TAG:?the image tag is not set}"
-        HV_NAME=HV1 MAC=52:54:00:12:34:56 envsubst '${HV_NAME} ${MAC}' \
-          < ./.github/actions/test/integration/setup/hv.xml \
-          > ./.github/actions/test/integration/setup/hv1.xml
-        sudo cp "/opt/${TAG}.qcow2" /var/lib/libvirt/images/HV1.qcow2
-
-        sudo virsh define ./.github/actions/test/integration/setup/hv1.xml
-        sudo virsh start HV1
-
-    - name: Create HyperVisor 2
-      shell: bash
-      run: |
-        set -Eeuo pipefail
-        : "${TAG:?the image tag is not set}"
-        HV_NAME=HV2 MAC=52:54:00:65:43:21 envsubst '${HV_NAME} ${MAC}' \
-          < ./.github/actions/test/integration/setup/hv.xml \
-          > ./.github/actions/test/integration/setup/hv2.xml
-        sudo cp "/opt/${TAG}.qcow2" /var/lib/libvirt/images/HV2.qcow2
-
-        sudo virsh define ./.github/actions/test/integration/setup/hv2.xml
-        sudo virsh start HV2
-
-    - name: Configure SSH and libvirt on HyperVisors
-      shell: bash
-      run: |
-        MAX_ITER=30
-
-        setup_hv() {
-          local IP="$1"
-
-          # Configure SSH between HyperVisors
-          scp /opt/ssh_host_ed25519_key "$IP:/opt/ssh_host_ed25519_key"
-          scp "$HOME/.ssh/config" "$IP:/root/.ssh/config"
-          ssh "$IP" << EOF
-            chmod 700 /root/.ssh
-            chmod 600 /root/.ssh/config
-            chmod 600 /opt/ssh_host_ed25519_key
-        EOF
-
-          # Set up libvirt storage pool and network
-          scp ./.github/actions/test/integration/setup/virbr-vm.xml "$IP:/opt/virbr-vm.xml"
-          ssh "$IP" << EOF
-            systemctl start libvirtd
-
-            virsh pool-destroy default || true
-            virsh pool-undefine default || true
-            virsh pool-define-as default dir --target /var/lib/libvirt/images
-            virsh pool-build default
-            virsh pool-start default
-            virsh pool-autostart default
-
-            virsh net-destroy default || true
-            virsh net-undefine default || true
-            virsh net-define /opt/virbr-vm.xml
-            virsh net-start default
-            virsh net-autostart default
-        EOF
-        }
-
-        wait_for_ssh() {
-          local VM_NAME="$1"
-
-          for ((i=1; i<=MAX_ITER; i++)); do
-            local IP=$(sudo virsh domifaddr "$VM_NAME" | awk '/ipv4/ {print $4}' | cut -d'/' -f1)
-            if [ -z "$IP" ]; then
-              echo "No IP address found for $VM_NAME. Retrying..."
-            elif ssh "$IP" 'exit' 2>/dev/null; then
-              echo "$VM_NAME is up at IP: $IP"
-              setup_hv "$IP"
-              break
-            fi
-            if (( i == MAX_ITER )); then
-              echo "Timeout waiting for $VM_NAME to respond to SSH."
-              sudo cat "/var/log/$VM_NAME.log"
-              exit 1
-            fi
-            echo "Waiting for $VM_NAME to respond to SSH... ($i/$MAX_ITER)"
-            sleep 10
+        for spec in "HV1 192.168.122.2" "HV2 192.168.122.3"; do
+          set -- $spec
+          name=$1
+          ip=$2
+          sudo virsh dominfo "$name" >/dev/null 2>&1 && { echo "refusing to replace a pre-existing domain: $name" >&2; exit 1; }
+          sudo virsh define "$HV_DIR/$name.xml"
+          sudo virsh start "$name"
+          for ((t=1; t<=60; t++)); do
+            ssh "$ip" true 2>/dev/null && break
+            [ "$t" -lt 60 ] || { echo "timeout waiting for $name to respond to SSH" >&2; sudo cat "/var/log/$name.log" || true; exit 1; }
+            sleep 5
           done
-        }
-
-        wait_for_ssh HV1
-        wait_for_ssh HV2
+          scp -q "$KEY" "$ip:/opt/ssh_host_ed25519_key"
+          scp -q "$HOME/.ssh/config" "$ip:/root/.ssh/config"
+          scp -q ./.github/actions/test/integration/setup/virbr-vm.xml "$ip:/opt/virbr-vm.xml"
+          ssh "$ip" "bash -s" <<'EOF'
+        set -Eeuo pipefail
+        chmod 700 /root/.ssh
+        chmod 600 /root/.ssh/config /opt/ssh_host_ed25519_key
+        mkdir -p /var/log/libvirt/ch
+        systemctl start libvirtd
+        virsh pool-destroy default || true
+        virsh pool-undefine default || true
+        virsh pool-define-as default dir --target /var/lib/libvirt/images
+        virsh pool-build default; virsh pool-start default; virsh pool-autostart default
+        virsh net-destroy default || true
+        virsh net-undefine default || true
+        virsh net-define /opt/virbr-vm.xml
+        virsh net-start default; virsh net-autostart default
+        EOF
+        done

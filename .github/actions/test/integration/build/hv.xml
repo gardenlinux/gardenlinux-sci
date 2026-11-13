@@ -19,7 +19,7 @@
         </disk>
         <interface type='network'>
             <mac address='${MAC}' />
-            <source network='default' />
+            <source network='${NETWORK}' />
             <model type='virtio' />
         </interface>
         <console type='pty'>
