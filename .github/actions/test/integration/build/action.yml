@@ -95,22 +95,24 @@ runs:
     - name: Generate ignition
       shell: bash
       run: |
+        set -Eeuo pipefail
         ssh-keygen -t ed25519 -f "/opt/ssh_host_ed25519_key" -N "" -C "user" -q
         chmod 600 /opt/ssh_host_ed25519_key
         SSH_KEY=$(cat /opt/ssh_host_ed25519_key.pub)
         echo "SSH_KEY=$SSH_KEY" >> $GITHUB_ENV
-        cp ./.github/actions/test/integration/build/dev-user-butane.yaml ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
-        yq '.storage.files += load("./.github/actions/test/integration/build/root-hints.yaml")' ./.github/actions/test/integration/build/dev-user-butane.yaml > ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
-
-        sed -i "s|SSH_KEY_GOES_HERE|$SSH_KEY|g" ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
-        sed -i "s|SSH_KEY_GOES_HERE|$SSH_KEY|g" ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
-
         PASSWORD=$(openssl passwd "password")
         echo "PASSWORD=$PASSWORD" >> $GITHUB_ENV
-        sed -i "s|PASSWORD_GOES_HERE|$PASSWORD|g" ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
-        sed -i "s|PASSWORD_GOES_HERE|$PASSWORD|g" ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
-        sed -i "s|TAG_GOES_HERE|${{ inputs.image_tag }}|g" ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
-        sed -i "s|TAG_GOES_HERE|${{ inputs.image_tag }}|g" ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
+        : "${SSH_KEY:?the shared test SSH key is not set}"
+        : "${PASSWORD:?the guest password is not set}"
+        : "${TAG:?the image tag is not set}"
+
+        envsubst '${SSH_KEY} ${PASSWORD} ${TAG}' \
+          < ./.github/actions/test/integration/build/dev-user-butane.yaml \
+          > ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
+
+        yq '.storage.files += load("./.github/actions/test/integration/build/root-hints.yaml")' ./.github/actions/test/integration/build/dev-user-butane.yaml \
+          | envsubst '${SSH_KEY} ${PASSWORD} ${TAG}' \
+          > ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
 
         butane --pretty --strict ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml > "/opt/${TAG}-hv1.ign"
         butane --pretty --strict ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml > "/opt/${TAG}-hv2.ign"
@@ -128,9 +130,16 @@ runs:
     - name: Generate ubuntu cloud-init
       shell: bash
       run: |
-        sed -i "s|SSH_KEY_GOES_HERE|$SSH_KEY|g" ./.github/actions/test/integration/build/user-data
-        sed -i "s|PASSWORD_GOES_HERE|$PASSWORD|g" ./.github/actions/test/integration/build/user-data
-        genisoimage -output /opt/ubuntu-cloud-init-ds.iso -volid cidata -joliet -rock ./.github/actions/test/integration/build/meta-data ./.github/actions/test/integration/build/user-data
+        set -Eeuo pipefail
+        : "${SSH_KEY:?the shared test SSH key is not set}"
+        : "${PASSWORD:?the guest password is not set}"
+
+        RENDER_DIR=$(mktemp -d)
+        trap 'rm -rf "$RENDER_DIR"' EXIT
+        envsubst '${SSH_KEY} ${PASSWORD}' \
+          < ./.github/actions/test/integration/build/user-data \
+          > "$RENDER_DIR/user-data"
+        genisoimage -output /opt/ubuntu-cloud-init-ds.iso -volid cidata -joliet -rock ./.github/actions/test/integration/build/meta-data "$RENDER_DIR/user-data"
 
     # - name: Upload artifacts
     #   uses: actions/upload-artifact@v4
