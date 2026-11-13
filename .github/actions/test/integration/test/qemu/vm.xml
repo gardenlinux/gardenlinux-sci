@@ -14,12 +14,12 @@
     <devices>
         <disk type='file' device='disk'>
             <driver name='qemu' type='qcow2' />
-            <source file='/var/lib/libvirt/images/ubuntu.qcow2' />
+            <source file='/var/lib/libvirt/images/cirros.qcow2' />
             <target dev='vda' bus='virtio' />
         </disk>
         <disk type='file' device='disk'>
             <driver name='qemu' type='raw' />
-            <source file='/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso' />
+            <source file='/var/lib/libvirt/images/cirros-cloud-init-ds.iso' />
             <target dev='vdb' bus='virtio' />
             <readonly />
         </disk>

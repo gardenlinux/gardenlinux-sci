@@ -1,38 +1,40 @@
 name: guest
-description: Build the Ubuntu test guest and the shared test SSH identity
+description: Build the CirrOS test guest and the shared test SSH identity
 runs:
   using: "composite"
   steps:
-    - name: Generate test SSH key and password
+    - name: Generate the test SSH key
       shell: bash
       run: |
         ssh-keygen -t ed25519 -f "/opt/ssh_host_ed25519_key" -N "" -C "user" -q
         chmod 600 /opt/ssh_host_ed25519_key
         SSH_KEY=$(cat /opt/ssh_host_ed25519_key.pub)
         echo "SSH_KEY=$SSH_KEY" >> $GITHUB_ENV
-        PASSWORD=$(openssl passwd "password")
-        echo "PASSWORD=$PASSWORD" >> $GITHUB_ENV
 
-    - name: Download ubuntu cloud image
+    - name: Download the CirrOS test image
       shell: bash
       run: |
-        wget -q "https://cloud-images.ubuntu.com/minimal/releases/noble/release/ubuntu-24.04-minimal-cloudimg-amd64.img" -O /opt/ubuntu.qcow2
+        set -Eeuo pipefail
+        URL="https://download.cirros-cloud.net/0.6.3/cirros-0.6.3-x86_64-disk.img"
+        SHA256="7d6355852aeb6dbcd191bcda7cd74f1536cfe5cbf8a10495a7283a8396e4b75b"
 
-    - name: Generate raw ubuntu image for CHV
+        wget -q "$URL" -O /opt/cirros.qcow2
+        echo "$SHA256  /opt/cirros.qcow2" | sha256sum -c -
+
+    - name: Generate raw CirrOS image for CHV
       shell: bash
       run: |
-        qemu-img convert -p -f qcow2 -O raw /opt/ubuntu.qcow2 /opt/ubuntu.raw
+        qemu-img convert -p -f qcow2 -O raw /opt/cirros.qcow2 /opt/cirros.raw
 
-    - name: Generate ubuntu cloud-init
+    - name: Generate the CirrOS cloud-init seed
       shell: bash
       run: |
         set -Eeuo pipefail
         : "${SSH_KEY:?the shared test SSH key is not set}"
-        : "${PASSWORD:?the guest password is not set}"
 
         RENDER_DIR=$(mktemp -d)
         trap 'rm -rf "$RENDER_DIR"' EXIT
-        envsubst '${SSH_KEY} ${PASSWORD}' \
+        envsubst '${SSH_KEY}' \
           < ./.github/actions/test/integration/guest/user-data \
           > "$RENDER_DIR/user-data"
-        genisoimage -output /opt/ubuntu-cloud-init-ds.iso -volid cidata -joliet -rock ./.github/actions/test/integration/guest/meta-data "$RENDER_DIR/user-data"
+        genisoimage -output /opt/cirros-cloud-init-ds.iso -volid cidata -joliet -rock ./.github/actions/test/integration/guest/meta-data "$RENDER_DIR/user-data"
