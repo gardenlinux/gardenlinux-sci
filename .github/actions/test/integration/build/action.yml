@@ -7,6 +7,19 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Install oras
+      uses: oras-project/setup-oras@5e2f2482b30b0cb3e14e67f89a80c88c659a7c63 # v2
+      with:
+        version: 1.2.2
+
+    - name: Install butane
+      shell: bash
+      run: |
+        BUTANE_VERSION="0.24.0"
+        curl -LO "https://github.com/coreos/butane/releases/download/v${BUTANE_VERSION}/butane-x86_64-unknown-linux-gnu"
+        chmod +x "butane-x86_64-unknown-linux-gnu"
+        sudo mv "butane-x86_64-unknown-linux-gnu" /usr/local/bin/butane
+
     # TODO https://github.com/actions/cache
     - name: Set ENV
       shell: bash
@@ -20,6 +33,22 @@ runs:
         echo "TAG=$TAG" >> $GITHUB_ENV
         echo "ESP_SIZE=$ESP_SIZE" >> $GITHUB_ENV
         echo "DISK_SIZE=$DISK_SIZE" >> $GITHUB_ENV
+
+    - name: Validate image tag
+      shell: bash
+      run: |
+        if [ -z "$TAG" ]; then
+          echo "Error: image_tag is required"
+          exit 1
+        fi
+
+        echo "Verifying image $TAG exists in GHCR..."
+        if ! digest=$(oras resolve "$REPO:$TAG" 2>&1); then
+          echo "Error: Image tag '$TAG' not found in $REPO"
+          echo "Resolve output: $digest"
+          exit 1
+        fi
+        echo "Image tag present in GHCR (digest: ${digest:0:12}...)"
 
     - name: Pull ORAS artifacts
       shell: bash
@@ -96,15 +125,13 @@ runs:
       shell: bash
       run: |
         set -Eeuo pipefail
-        ssh-keygen -t ed25519 -f "/opt/ssh_host_ed25519_key" -N "" -C "user" -q
-        chmod 600 /opt/ssh_host_ed25519_key
-        SSH_KEY=$(cat /opt/ssh_host_ed25519_key.pub)
-        echo "SSH_KEY=$SSH_KEY" >> $GITHUB_ENV
-        PASSWORD=$(openssl passwd "password")
-        echo "PASSWORD=$PASSWORD" >> $GITHUB_ENV
         : "${SSH_KEY:?the shared test SSH key is not set}"
-        : "${PASSWORD:?the guest password is not set}"
         : "${TAG:?the image tag is not set}"
+
+        # The hypervisor root password belongs to this image, so derive it here
+        # instead of importing the one the nested guest uses.
+        PASSWORD=$(openssl passwd "password")
+        export PASSWORD
 
         envsubst '${SSH_KEY} ${PASSWORD} ${TAG}' \
           < ./.github/actions/test/integration/build/dev-user-butane.yaml \
@@ -117,29 +144,28 @@ runs:
         butane --pretty --strict ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml > "/opt/${TAG}-hv1.ign"
         butane --pretty --strict ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml > "/opt/${TAG}-hv2.ign"
 
-    - name: Download ubuntu cloud image
-      shell: bash
-      run: |
-        wget -q "https://cloud-images.ubuntu.com/minimal/releases/noble/release/ubuntu-24.04-minimal-cloudimg-amd64.img" -O /opt/ubuntu.qcow2
-
-    - name: Generate raw ubuntu image for CHV
-      shell: bash
-      run: |
-        qemu-img convert -p -f qcow2 -O raw /opt/ubuntu.qcow2 /opt/ubuntu.raw
-
-    - name: Generate ubuntu cloud-init
+    - name: Prepare the HyperVisor directory
       shell: bash
       run: |
         set -Eeuo pipefail
-        : "${SSH_KEY:?the shared test SSH key is not set}"
-        : "${PASSWORD:?the guest password is not set}"
+        HV_DIR=/opt/hv
+        KEY=/opt/ssh_host_ed25519_key
+        [ -s "$KEY" ] || { echo "the shared test SSH key is missing: $KEY" >&2; exit 1; }
 
-        RENDER_DIR=$(mktemp -d)
-        trap 'rm -rf "$RENDER_DIR"' EXIT
-        envsubst '${SSH_KEY} ${PASSWORD}' \
-          < ./.github/actions/test/integration/build/user-data \
-          > "$RENDER_DIR/user-data"
-        genisoimage -output /opt/ubuntu-cloud-init-ds.iso -volid cidata -joliet -rock ./.github/actions/test/integration/build/meta-data "$RENDER_DIR/user-data"
+        install -d "$HV_DIR"
+        sudo install -m 0644 "/opt/${TAG}.qcow2" /var/lib/libvirt/images/HV1.qcow2
+        sudo install -m 0644 "/opt/${TAG}.qcow2" /var/lib/libvirt/images/HV2.qcow2
+        sudo install -m 0644 "/opt/${TAG}-hv1.ign" /var/lib/libvirt/images/HV1.ign
+        sudo install -m 0644 "/opt/${TAG}-hv2.ign" /var/lib/libvirt/images/HV2.ign
+
+        render_hv() {
+          local name=$1 mac=$2
+          HV_NAME=$name MAC=$mac NETWORK=${HV_NETWORK:-default} \
+            envsubst '${HV_NAME} ${MAC} ${NETWORK}' \
+            < ./.github/actions/test/integration/build/hv.xml > "$HV_DIR/$name.xml"
+        }
+        render_hv HV1 52:54:00:12:34:56
+        render_hv HV2 52:54:00:65:43:21
 
     # - name: Upload artifacts
     #   uses: actions/upload-artifact@v4
