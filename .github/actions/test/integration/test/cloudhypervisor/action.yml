@@ -6,30 +6,27 @@ runs:
     - name: Copy VM defintions and artifacts to the HyperVisors
       shell: bash
       run: |
-        KEY=/opt/ssh_host_ed25519_key
-        SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        USER="root"
+        # Required from the job environment; the shared key is the identity
+        # that the ssh config names.
+        [ -s /opt/ssh_host_ed25519_key ] || { echo "the shared SSH key /opt/ssh_host_ed25519_key is missing" >&2; exit 1; }
         IP_HV1="192.168.122.2"
         IP_HV2="192.168.122.3"
 
-        scp $SSH_OPTS ./.github/actions/test/integration/test/cloudhypervisor/vm.xml "$USER@$IP_HV1:/opt/vm-chv.xml"
-        scp $SSH_OPTS /opt/ubuntu.raw "$USER@$IP_HV1:/var/lib/libvirt/images/ubuntu.raw"
-        scp $SSH_OPTS /opt/ubuntu-cloud-init-ds.iso "$USER@$IP_HV1:/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso"
+        scp ./.github/actions/test/integration/test/cloudhypervisor/vm.xml "$IP_HV1:/opt/vm-chv.xml"
+        scp /opt/ubuntu.raw "$IP_HV1:/var/lib/libvirt/images/ubuntu.raw"
+        scp /opt/ubuntu-cloud-init-ds.iso "$IP_HV1:/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso"
 
         # libvirt migration between cloudhypervisor instances does not support storage migration yet
-        scp $SSH_OPTS /opt/ubuntu.raw "$USER@$IP_HV2:/var/lib/libvirt/images/ubuntu.raw"
+        scp /opt/ubuntu.raw "$IP_HV2:/var/lib/libvirt/images/ubuntu.raw"
         # the cloud-init data is not migrated from source to destination, but needed for the VM to run at the destination
-        scp $SSH_OPTS /opt/ubuntu-cloud-init-ds.iso "$USER@$IP_HV2:/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso"
+        scp /opt/ubuntu-cloud-init-ds.iso "$IP_HV2:/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso"
 
     - name: Start VM on HyperVisor 1
       shell: bash
       run: |
-        KEY=/opt/ssh_host_ed25519_key
-        SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        USER="root"
         IP_HV1="192.168.122.2"
 
-        ssh $SSH_OPTS "$USER@$IP_HV1" << EOF
+        ssh "$IP_HV1" << EOF
           virsh -c ch:///session define /opt/vm-chv.xml
           virsh -c ch:///session start VM-CHV
         EOF
@@ -37,16 +34,9 @@ runs:
     - name: Wait for VM to be ready
       shell: bash
       run: |
-        KEY=/opt/ssh_host_ed25519_key
-        SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        USER="root"
         IP_HV1="192.168.122.2"
 
-        ssh $SSH_OPTS "$USER@$IP_HV1" << EOF
-          KEY=/opt/ssh_host_ed25519_key
-          SSH_OPTS="-i \$KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-          USER="root"
-
+        ssh "$IP_HV1" << EOF
           MAX_ITER="${BOOT_MAX_ITER:-60}"
           for ((i=1; i<=MAX_ITER; i++)); do
             IP=\$(virsh -c ch:///session domifaddr VM-CHV | awk '/ipv4/ {print \$4}' | cut -d'/' -f1)
@@ -54,15 +44,15 @@ runs:
               echo "No IP address found for VM. Retrying..."
             elif (( i >= MAX_ITER - 2 )); then
               # Show SSH errors on last 3 attempts for debugging
-              if ssh \$SSH_OPTS "\$USER@\$IP" 'exit'; then
+              if ssh "\$IP" 'exit'; then
                 echo "VM is up at IP: \$IP"
-                ssh \$SSH_OPTS "\$USER@\$IP" 'echo "Hello, World!" > /opt/hello.txt'
+                ssh "\$IP" 'echo "Hello, World!" > /opt/hello.txt'
                 break
               fi
-            elif ssh \$SSH_OPTS "\$USER@\$IP" 'exit' 2>/dev/null; then
+            elif ssh "\$IP" 'exit' 2>/dev/null; then
               echo "VM is up at IP: \$IP"
               # create a dummy file for verification later
-              ssh \$SSH_OPTS "\$USER@\$IP" 'echo "Hello, World!" > /opt/hello.txt'
+              ssh "\$IP" 'echo "Hello, World!" > /opt/hello.txt'
               break
             fi
             if (( i == MAX_ITER )); then
@@ -77,7 +67,7 @@ runs:
               echo "--- arp -n ---"
               arp -n 2>/dev/null || ip neigh || true
               echo "--- ssh -v attempt ---"
-              ssh -v \$SSH_OPTS "\$USER@\$IP" 'exit' 2>&1 || true
+              ssh -v "\$IP" 'exit' 2>&1 || true
               echo "=== END DIAGNOSTICS ==="
               exit 1
             fi
@@ -86,19 +76,15 @@ runs:
           done
         EOF
 
-    - name: Mirgrate the VM to HyperVisor 2
+    - name: Migrate the VM to HyperVisor 2
       shell: bash
       run: |
-        KEY=/opt/ssh_host_ed25519_key
-        SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        USER="root"
         IP_HV1="192.168.122.2"
 
-        ssh $SSH_OPTS "$USER@$IP_HV1" << EOF
-          USER="root"
+        ssh "$IP_HV1" << EOF
           IP_HV2="192.168.122.3"
 
-          virsh -c ch:///session migrate --p2p --persistent --undefinesource --live VM-CHV ch+ssh://\$USER@\$IP_HV2/system
+          virsh -c ch:///session migrate --p2p --persistent --undefinesource --live VM-CHV ch+ssh://root@\$IP_HV2/system
           if virsh -c ch:///session dominfo VM-CHV &>/dev/null; then
             echo "VM is still present on HV1 after migration!"
             exit 1
@@ -108,12 +94,9 @@ runs:
     - name: Verify VM status on HyperVisor 2
       shell: bash
       run: |
-        KEY=/opt/ssh_host_ed25519_key
-        SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        USER="root"
         IP_HV2="192.168.122.3"
 
-        ssh $SSH_OPTS "$USER@$IP_HV2" << EOF
+        ssh "$IP_HV2" << EOF
           if virsh -c ch:///session dominfo VM-CHV | awk '/State:/ {print \$2}' | grep -q "running"; then
             echo "VM is running on HV2."
           else
@@ -121,24 +104,20 @@ runs:
             exit 1
           fi
 
-          KEY=/opt/ssh_host_ed25519_key
-          SSH_OPTS="-i \$KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-          USER="root"
           # waiting for the IP to be visible to the new HyperVisor via DHCP takes WAYYYYYYY too long
           # the IP is static, so we can just use it directly
           IP="192.168.222.3"
 
           MAX_ITER="${VERIFY_MAX_ITER:-15}"
           for ((i=1; i<=MAX_ITER; i++)); do
-            if ssh \$SSH_OPTS "\$USER@\$IP" 'exit' 2>/dev/null; then
+            if ssh "\$IP" 'exit' 2>/dev/null; then
               echo "VM is up at IP: \$IP"
               # verify the migration by checking the dummy file
-              if ssh \$SSH_OPTS "\$USER@\$IP" 'test -f /opt/hello.txt'; then
+              if ssh "\$IP" 'test -f /opt/hello.txt'; then
                 echo "Dummy file exists on VM, migration successful."
                 break
               else
                 echo "Dummy file does not exist on VM, migration failed."
-                exit 1
               fi
             fi
             if (( i == MAX_ITER )); then
@@ -149,7 +128,7 @@ runs:
               echo "--- ip route ---"
               ip route || true
               echo "--- ssh -v attempt ---"
-              ssh -v \$SSH_OPTS "\$USER@\$IP" 'exit' 2>&1 || true
+              ssh -v "\$IP" 'exit' 2>&1 || true
               echo "=== END DIAGNOSTICS ==="
               exit 1
             fi
