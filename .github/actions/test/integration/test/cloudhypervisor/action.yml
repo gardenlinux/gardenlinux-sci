@@ -13,13 +13,13 @@ runs:
         IP_HV2="192.168.122.3"
 
         scp ./.github/actions/test/integration/test/cloudhypervisor/vm.xml "$IP_HV1:/opt/vm-chv.xml"
-        scp /opt/ubuntu.raw "$IP_HV1:/var/lib/libvirt/images/ubuntu.raw"
-        scp /opt/ubuntu-cloud-init-ds.iso "$IP_HV1:/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso"
+        scp /opt/cirros.raw "$IP_HV1:/var/lib/libvirt/images/cirros.raw"
+        scp /opt/cirros-cloud-init-ds.iso "$IP_HV1:/var/lib/libvirt/images/cirros-cloud-init-ds.iso"
 
         # libvirt migration between cloudhypervisor instances does not support storage migration yet
-        scp /opt/ubuntu.raw "$IP_HV2:/var/lib/libvirt/images/ubuntu.raw"
+        scp /opt/cirros.raw "$IP_HV2:/var/lib/libvirt/images/cirros.raw"
         # the cloud-init data is not migrated from source to destination, but needed for the VM to run at the destination
-        scp /opt/ubuntu-cloud-init-ds.iso "$IP_HV2:/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso"
+        scp /opt/cirros-cloud-init-ds.iso "$IP_HV2:/var/lib/libvirt/images/cirros-cloud-init-ds.iso"
 
     - name: Start VM on HyperVisor 1
       shell: bash
