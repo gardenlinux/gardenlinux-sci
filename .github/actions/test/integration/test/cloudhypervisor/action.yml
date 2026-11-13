@@ -46,13 +46,13 @@ runs:
               # Show SSH errors on last 3 attempts for debugging
               if ssh "\$IP" 'exit'; then
                 echo "VM is up at IP: \$IP"
-                ssh "\$IP" 'echo "Hello, World!" > /opt/hello.txt'
+                ssh "\$IP" 'echo "Hello, World!" > /home/cirros/hello.txt'
                 break
               fi
             elif ssh "\$IP" 'exit' 2>/dev/null; then
               echo "VM is up at IP: \$IP"
               # create a dummy file for verification later
-              ssh "\$IP" 'echo "Hello, World!" > /opt/hello.txt'
+              ssh "\$IP" 'echo "Hello, World!" > /home/cirros/hello.txt'
               break
             fi
             if (( i == MAX_ITER )); then
@@ -113,7 +113,7 @@ runs:
             if ssh "\$IP" 'exit' 2>/dev/null; then
               echo "VM is up at IP: \$IP"
               # verify the migration by checking the dummy file
-              if ssh "\$IP" 'test -f /opt/hello.txt'; then
+              if ssh "\$IP" 'test -f /home/cirros/hello.txt'; then
                 echo "Dummy file exists on VM, migration successful."
                 break
               else

@@ -11,7 +11,7 @@ runs:
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
         cat > ~/.ssh/config <<'EOF'
-        Host 192.168.122.* 192.168.222.*
+        Host 192.168.122.*
           IdentityFile /opt/ssh_host_ed25519_key
           IdentitiesOnly yes
           StrictHostKeyChecking no
@@ -20,6 +20,16 @@ runs:
           ServerAliveInterval 15
           ServerAliveCountMax 4
           User root
+
+        Host 192.168.222.*
+          IdentityFile /opt/ssh_host_ed25519_key
+          IdentitiesOnly yes
+          StrictHostKeyChecking no
+          UserKnownHostsFile /dev/null
+          ConnectTimeout 10
+          ServerAliveInterval 15
+          ServerAliveCountMax 4
+          User cirros
         EOF
         chmod 600 ~/.ssh/config
 
