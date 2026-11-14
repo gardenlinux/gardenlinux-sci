@@ -1,0 +1,5 @@
+description: "KVM Cloud Hypervisor Flag"
+type: flag
+features:
+  include:
+    - _kvmBase

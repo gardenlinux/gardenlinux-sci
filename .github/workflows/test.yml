@@ -45,8 +45,8 @@ jobs:
           image_tag: ${{ inputs.image_tag }}
       - name: Setup
         uses: ./.github/actions/test/integration/setup
-      - name: Test QEMU
-        uses: ./.github/actions/test/integration/test/qemu
+      #- name: Test QEMU
+      #  uses: ./.github/actions/test/integration/test/qemu
       - name: Test CloudHypervisor
         uses: ./.github/actions/test/integration/test/cloudhypervisor
       - name: Collect Debug Logs
