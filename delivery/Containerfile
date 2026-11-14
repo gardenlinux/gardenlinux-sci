@@ -1,0 +1,23 @@
+# SCI delivery image; the staging directory is the build context.
+# FROM is pinned by digest: resolve with `docker buildx imagetools inspect`.
+FROM docker.io/library/debian@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
+
+ENV HOST_ROOT=/host \
+    STAGING_DIR=/opt/sci \
+    INTERVAL=60 \
+    NSENTER=1
+
+# Fetch mode downloads and verifies a signed build from the host network.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 ca-certificates openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+# The staging context also carries the script for the guest-visible share.
+COPY . /opt/sci/
+COPY sci-delivery.py /usr/local/bin/sci-delivery.py
+RUN chmod 0755 /usr/local/bin/sci-delivery.py
+
+# sci-delivery.py keeps its `uv run --script` shebang for direct execution on
+# a workstation; the image runs it with the distribution python3 because a
+# minimal container has no uv and no network.
+ENTRYPOINT ["/usr/bin/python3", "/usr/local/bin/sci-delivery.py"]

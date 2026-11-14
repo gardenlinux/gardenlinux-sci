@@ -1,0 +1,11 @@
+# SCI extension delivery manifest: <name> <restart-units...>
+# TARGET_BASE is the Garden Linux major line; the delivery step
+# refuses other lines.
+TARGET_BASE=2150
+sci-10-base
+sci-20-compute
+sci-21-network openvswitch-switch.service ovsdb-server.service ovs-vswitchd.service
+sci-22-storage multipathd.service iscsid.service
+sci-40-libvirt libvirtd.service
+sci-50-virt-ch
+sci-51-virt-qemu
