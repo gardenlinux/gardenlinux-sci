@@ -1,18 +1,11 @@
-#cloud-config
-users:
-  - name: root
-    shell: /bin/bash
-    ssh_authorized_keys:
-      - "${SSH_KEY}"
-    hashed_passwd: "${PASSWORD}"
+#!/bin/sh
+set -eu
 
-disable_root: false
-
-network:
-  version: 2
-  ethernets:
-    all-interfaces:
-      match:
-        name: "*"
-      dhcp4: true
-      dhcp6: true
+# CirrOS' NoCloud datasource executes user-data as a shell script; it does not
+# run cloud-init. Install the shared test key for the default cirros user.
+home=/home/cirros
+mkdir -p "$home/.ssh"
+printf '%s\n' '${SSH_KEY}' > "$home/.ssh/authorized_keys"
+chown -R cirros:cirros "$home/.ssh"
+chmod 700 "$home/.ssh"
+chmod 600 "$home/.ssh/authorized_keys"
