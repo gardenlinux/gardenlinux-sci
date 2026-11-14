@@ -6,6 +6,9 @@ runs:
     - name: Obtain logs from test runner
       shell: bash
       run: |
+        # Required from the job environment; the shared key is the identity
+        # that the ssh config names.
+        [ -s /opt/ssh_host_ed25519_key ] || { echo "the shared SSH key /opt/ssh_host_ed25519_key is missing" >&2; exit 1; }
         sudo lscpu > lscpu-RUNNER.log || true
         sudo lshw > lshw-runner.log || true
         sudo journalctl --no-pager > journal-RUNNER.log || true
@@ -13,38 +16,36 @@ runs:
         sudo cp /var/log/libvirt/qemu/HV1.log "libvirt-HV1.log" || true
         sudo cp /var/log/libvirt/qemu/HV2.log "libvirt-HV2.log" || true
 
+        # The HV serial consoles: the only record of a frozen guest's
+        # final kernel output (the journal goes down with the guest).
+        sudo cp /var/log/HV1.log "serial-HV1.log" || true
+        sudo cp /var/log/HV2.log "serial-HV2.log" || true
+
     - name: Obtain logs from hypervisors
       shell: bash
       run: |
-        KEY=/opt/ssh_host_ed25519_key
-        SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        USER="root"
         HV1_IP="192.168.122.2"
         HV2_IP="192.168.122.3"
 
-        ssh $SSH_OPTS $USER@$HV1_IP "journalctl --no-pager" > "journal-HV1.log" || true
-        scp $SSH_OPTS $USER@$HV1_IP:/var/log/libvirt/qemu/VM-QEMU.log "libvirt-VM-QEMU-HV1.log" || true
-        scp $SSH_OPTS $USER@$HV1_IP:/var/log/libvirt/ch/VM-CHV.log "libvirt-VM-CHV-HV1.log" || true
-        scp $SSH_OPTS $USER@$HV1_IP:/var/log/QEMU.log "serial-VM-QEMU-HV1.log" || true
-        scp $SSH_OPTS $USER@$HV1_IP:/var/log/CHV.log "serial-VM-CHV-HV1.log" || true
+        ssh "$HV1_IP" "journalctl --no-pager" > "journal-HV1.log" || true
+        scp "$HV1_IP:/var/log/libvirt/qemu/VM-QEMU.log" "libvirt-VM-QEMU-HV1.log" || true
+        scp "$HV1_IP:/var/log/libvirt/ch/VM-CHV.log" "libvirt-VM-CHV-HV1.log" || true
+        scp "$HV1_IP:/var/log/QEMU.log" "serial-VM-QEMU-HV1.log" || true
+        scp "$HV1_IP:/var/log/CHV.log" "serial-VM-CHV-HV1.log" || true
 
-        ssh $SSH_OPTS $USER@$HV2_IP "journalctl --no-pager" > "journal-HV2.log" || true
-        scp $SSH_OPTS $USER@$HV2_IP:/var/log/libvirt/qemu/VM-QEMU.log "libvirt-VM-QEMU-HV2.log" || true
-        scp $SSH_OPTS $USER@$HV2_IP:/var/log/libvirt/ch/VM-CHV.log "libvirt-VM-CHV-HV2.log" || true
-        scp $SSH_OPTS $USER@$HV2_IP:/var/log/QEMU.log "serial-VM-QEMU-HV2.log" || true
-        scp $SSH_OPTS $USER@$HV2_IP:/var/log/CHV.log "serial-VM-CHV-HV2.log" || true
+        ssh "$HV2_IP" "journalctl --no-pager" > "journal-HV2.log" || true
+        scp "$HV2_IP:/var/log/libvirt/qemu/VM-QEMU.log" "libvirt-VM-QEMU-HV2.log" || true
+        scp "$HV2_IP:/var/log/libvirt/ch/VM-CHV.log" "libvirt-VM-CHV-HV2.log" || true
+        scp "$HV2_IP:/var/log/QEMU.log" "serial-VM-QEMU-HV2.log" || true
+        scp "$HV2_IP:/var/log/CHV.log" "serial-VM-CHV-HV2.log" || true
 
     - name: Obtain network diagnostics from hypervisors
       shell: bash
       run: |
-        KEY=/opt/ssh_host_ed25519_key
-        SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        USER="root"
-
         for HV_NAME in HV1 HV2; do
           IP="192.168.122.$([[ $HV_NAME == HV1 ]] && echo 2 || echo 3)"
 
-          ssh $SSH_OPTS $USER@$IP "
+          ssh "$IP" "
             echo '=== ip addr ==='
             ip addr
             echo '=== ip route ==='
@@ -75,19 +76,15 @@ runs:
     - name: Set permissions
       shell: bash
       run: |
-        sudo chmod 644 *.log
+        sudo chmod 644 *.log || true
 
     - name: Collect coredumps from hypervisors
       shell: bash
       run: |
-        KEY=/opt/ssh_host_ed25519_key
-        SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        USER="root"
-
         for HV_NAME in HV1 HV2; do
           IP="192.168.122.$([[ $HV_NAME == HV1 ]] && echo 2 || echo 3)"
 
-          ssh $SSH_OPTS $USER@$IP "
+          ssh "$IP" "
             # Only proceed if coredumps exist
             if coredumpctl list --no-legend 2>/dev/null | grep -q .; then
               mkdir -p /tmp/coredumps-$HV_NAME
@@ -101,8 +98,8 @@ runs:
             fi
           " || true
 
-          if ssh $SSH_OPTS $USER@$IP "[ -d /tmp/coredumps-$HV_NAME ] && [ -n \"\$(ls /tmp/coredumps-$HV_NAME 2>/dev/null)\" ]"; then
-            scp -r $SSH_OPTS $USER@$IP:/tmp/coredumps-$HV_NAME ./ || true
+          if ssh "$IP" "[ -d /tmp/coredumps-$HV_NAME ] && [ -n \"\$(ls /tmp/coredumps-$HV_NAME 2>/dev/null)\" ]"; then
+            scp -r "$IP:/tmp/coredumps-$HV_NAME" ./ || true
           fi
          done
 

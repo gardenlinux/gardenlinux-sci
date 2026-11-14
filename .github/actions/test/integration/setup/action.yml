@@ -3,110 +3,95 @@ description: Set up Hypervisor and VM Environment for Integration Tests
 runs:
   using: "composite"
   steps:
-    - name: Configure the default libvirt network
+    - name: Write the shared SSH configuration
       shell: bash
       run: |
-        sudo virsh net-destroy default
-        sudo virsh net-undefine default
-        sudo virsh net-define ./.github/actions/test/integration/setup/virbr-hv.xml
-        sudo virsh net-start default
-        sudo virsh net-autostart default
+        # The boot step below copies the key to this path; the later steps
+        # rely on the matching Host block instead of repeating the options.
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        cat > ~/.ssh/config <<'EOF'
+        Host 192.168.122.* 192.168.222.*
+          IdentityFile /opt/ssh_host_ed25519_key
+          IdentitiesOnly yes
+          StrictHostKeyChecking no
+          UserKnownHostsFile /dev/null
+          ConnectTimeout 10
+          ServerAliveInterval 15
+          ServerAliveCountMax 4
+          User root
+        EOF
+        chmod 600 ~/.ssh/config
 
-    - name: Copy ignition file
+    - name: Boot the HyperVisors and configure the guests
       shell: bash
       run: |
-        sudo cp "/opt/${TAG}-hv1.ign" /var/lib/libvirt/images/HV1.ign
-        sudo cp "/opt/${TAG}-hv2.ign" /var/lib/libvirt/images/HV2.ign
-
-    - name: Create HyperVisor 1
-      shell: bash
-      run: |
-        cp ./.github/actions/test/integration/setup/hv.xml ./.github/actions/test/integration/setup/hv1.xml
-        sed -i "s|HV_NAME_GOES_HERE|HV1|g" ./.github/actions/test/integration/setup/hv1.xml
-        sed -i "s|MAC_GOES_HERE|52:54:00:12:34:56|g" ./.github/actions/test/integration/setup/hv1.xml
-        sudo cp "/opt/${TAG}.qcow2" /var/lib/libvirt/images/HV1.qcow2
-
-        sudo virsh define ./.github/actions/test/integration/setup/hv1.xml
-        sudo virsh start HV1
-
-    - name: Create HyperVisor 2
-      shell: bash
-      run: |
-        cp ./.github/actions/test/integration/setup/hv.xml ./.github/actions/test/integration/setup/hv2.xml
-        sed -i "s|HV_NAME_GOES_HERE|HV2|g" ./.github/actions/test/integration/setup/hv2.xml
-        sed -i "s|MAC_GOES_HERE|52:54:00:65:43:21|g" ./.github/actions/test/integration/setup/hv2.xml
-        sudo cp "/opt/${TAG}.qcow2" /var/lib/libvirt/images/HV2.qcow2
-
-        sudo virsh define ./.github/actions/test/integration/setup/hv2.xml
-        sudo virsh start HV2
-
-    - name: Configure SSH and libvirt on HyperVisors
-      shell: bash
-      run: |
+        set -Eeuo pipefail
+        HV_DIR=/opt/hv
         KEY=/opt/ssh_host_ed25519_key
-        SSH_OPTS="-i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        USER="root"
-        MAX_ITER=30
+        [ -s "$KEY" ] && [ -f "$KEY" ] \
+          || { echo "the shared test SSH key is missing: $KEY" >&2; exit 1; }
+        [ -s "$HV_DIR/HV1.xml" ] && [ -s "$HV_DIR/HV2.xml" ] \
+          || { echo "the hypervisor directory lacks HV1.xml or HV2.xml: $HV_DIR" >&2; exit 1; }
 
-        setup_hv() {
-          local IP="$1"
+        NETWORK=${HV_NETWORK:-default}
 
-          # Configure SSH between HyperVisors
-          scp $SSH_OPTS /opt/ssh_host_ed25519_key "$USER@$IP:/opt/ssh_host_ed25519_key"
-          ssh $SSH_OPTS "$USER@$IP" << EOF
-            chmod 700 /root/.ssh
-            echo "" > /root/.ssh/config
-            echo "Host 192.168.122.*" >> /root/.ssh/config
-            echo "    StrictHostKeyChecking no" >> /root/.ssh/config
-            echo "    UserKnownHostsFile /dev/null" >> /root/.ssh/config
-            echo "    IdentityFile /opt/ssh_host_ed25519_key" >> /root/.ssh/config
-            echo "    IdentitiesOnly yes" >> /root/.ssh/config
-            echo "    User root" >> /root/.ssh/config
-            chmod 600 /root/.ssh/config
-            chmod 600 /opt/ssh_host_ed25519_key
-        EOF
-
-          # Set up libvirt storage pool and network
-          scp $SSH_OPTS ./.github/actions/test/integration/setup/virbr-vm.xml "$USER@$IP:/opt/virbr-vm.xml"
-          ssh $SSH_OPTS "$USER@$IP" << EOF
-            systemctl start libvirtd
-
-            virsh pool-destroy default || true
-            virsh pool-undefine default || true
-            virsh pool-define-as default dir --target /var/lib/libvirt/images
-            virsh pool-build default
-            virsh pool-start default
-            virsh pool-autostart default
-
-            virsh net-destroy default || true
-            virsh net-undefine default || true
-            virsh net-define /opt/virbr-vm.xml
-            virsh net-start default
-            virsh net-autostart default
-        EOF
+        # virsh net-info also succeeds for a defined network that is inactive,
+        # so decide on its Active field, not on the exit status alone.
+        if ! net_info=$(sudo virsh net-info "$NETWORK" 2>/dev/null); then
+          [ "$NETWORK" = default ] \
+            || { echo "the libvirt network $NETWORK does not exist; only default may be defined from virbr-hv.xml" >&2; exit 1; }
+          sudo virsh net-define ./.github/actions/test/integration/setup/virbr-hv.xml
+          sudo virsh net-start "$NETWORK"
+        else
+          active=$(printf '%s\n' "$net_info" | awk '$1 == "Active:" { print $2 }')
+          [ -n "$active" ] \
+            || { echo "cannot read the Active state of the libvirt network $NETWORK" >&2; exit 1; }
+          if [ "$active" = no ]; then
+            sudo virsh net-start "$NETWORK"
+          elif [ "$active" != yes ]; then
+            echo "unexpected Active state '$active' for the libvirt network $NETWORK" >&2
+            exit 1
+          fi
+        fi
+        add_host() {
+          sudo virsh net-dumpxml "$NETWORK" | grep -q "mac='$1'" \
+            || sudo virsh net-update "$NETWORK" add ip-dhcp-host "<host mac='$1' ip='$2' name='$3'/>" --live --config
         }
+        add_host 52:54:00:12:34:56 192.168.122.2 hv1
+        add_host 52:54:00:65:43:21 192.168.122.3 hv2
 
-        wait_for_ssh() {
-          local VM_NAME="$1"
+        # The runner home ships as 750; qemu must traverse it to reach the disks.
+        sudo chmod o+x "$HOME"
 
-          for ((i=1; i<=MAX_ITER; i++)); do
-            local IP=$(sudo virsh domifaddr "$VM_NAME" | awk '/ipv4/ {print $4}' | cut -d'/' -f1)
-            if [ -z "$IP" ]; then
-              echo "No IP address found for $VM_NAME. Retrying..."
-            elif ssh $SSH_OPTS "$USER@$IP" 'exit' 2>/dev/null; then
-              echo "$VM_NAME is up at IP: $IP"
-              setup_hv "$IP"
-              break
-            fi
-            if (( i == MAX_ITER )); then
-              echo "Timeout waiting for $VM_NAME to respond to SSH."
-              sudo cat "/var/log/$VM_NAME.log"
-              exit 1
-            fi
-            echo "Waiting for $VM_NAME to respond to SSH... ($i/$MAX_ITER)"
-            sleep 10
+        for spec in "HV1 192.168.122.2" "HV2 192.168.122.3"; do
+          set -- $spec
+          name=$1
+          ip=$2
+          sudo virsh dominfo "$name" >/dev/null 2>&1 && { echo "refusing to replace a pre-existing domain: $name" >&2; exit 1; }
+          sudo virsh define "$HV_DIR/$name.xml"
+          sudo virsh start "$name"
+          for ((t=1; t<=60; t++)); do
+            ssh "$ip" true 2>/dev/null && break
+            [ "$t" -lt 60 ] || { echo "timeout waiting for $name to respond to SSH" >&2; sudo cat "/var/log/$name.log" || true; exit 1; }
+            sleep 5
           done
-        }
-
-        wait_for_ssh HV1
-        wait_for_ssh HV2
+          scp -q "$KEY" "$ip:/opt/ssh_host_ed25519_key"
+          scp -q "$HOME/.ssh/config" "$ip:/root/.ssh/config"
+          scp -q ./.github/actions/test/integration/setup/virbr-vm.xml "$ip:/opt/virbr-vm.xml"
+          ssh "$ip" "bash -s" <<'EOF'
+        set -Eeuo pipefail
+        chmod 700 /root/.ssh
+        chmod 600 /root/.ssh/config /opt/ssh_host_ed25519_key
+        mkdir -p /var/log/libvirt/ch
+        systemctl start libvirtd
+        virsh pool-destroy default || true
+        virsh pool-undefine default || true
+        virsh pool-define-as default dir --target /var/lib/libvirt/images
+        virsh pool-build default; virsh pool-start default; virsh pool-autostart default
+        virsh net-destroy default || true
+        virsh net-undefine default || true
+        virsh net-define /opt/virbr-vm.xml
+        virsh net-start default; virsh net-autostart default
+        EOF
+        done

@@ -16,6 +16,7 @@ runs:
           libvirt-clients \
           virtinst \
           bridge-utils \
+          virtiofsd \
           ovmf
 
     # Required for storing the ignition file in /var/lib/libvirt/images
@@ -26,15 +27,8 @@ runs:
         echo 'security_driver = "none"' | sudo tee -a /etc/libvirt/qemu.conf
         sudo systemctl restart libvirtd
 
-    - name: oras
-      uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2
-      with:
-        version: 1.2.2
-
-    - name: butane
+    # The libvirt qemu user must reach /dev/kvm for the hypervisor VMs.
+    - name: Make /dev/kvm accessible
       shell: bash
       run: |
-        BUTANE_VERSION="0.24.0"
-        curl -LO "https://github.com/coreos/butane/releases/download/v${BUTANE_VERSION}/butane-x86_64-unknown-linux-gnu"
-        chmod +x "butane-x86_64-unknown-linux-gnu"
-        sudo mv "butane-x86_64-unknown-linux-gnu" /usr/local/bin/butane
+        if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
