@@ -1,0 +1,55 @@
+<domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
+    <name>${HV_NAME}</name>
+    <memory unit='GiB'>6</memory>
+    <memoryBacking>
+        <!-- virtiofs needs a shared memory backend. -->
+        <source type='memfd' />
+        <access mode='shared' />
+    </memoryBacking>
+    <vcpu>2</vcpu>
+    <os>
+        <type arch='x86_64'>hvm</type>
+        <kernel>${KERNEL}</kernel>
+        <cmdline>root=PARTUUID=${ROOT_UUID} console=ttyS0 systemd.gpt_auto=0 audit=0 rw</cmdline>
+        <boot dev='hd' />
+    </os>
+    <features>
+        <acpi />
+    </features>
+    <cpu mode='host-passthrough' check='none' migratable='on' />
+    <devices>
+        <interface type='network'>
+            <mac address='${MAC}' />
+            <source network='${NETWORK}' />
+            <model type='virtio' />
+            <!-- Keep the libvirt-assigned NIC out of slot 0x02: the NVMe
+                 device arrives through qemu:commandline and QEMU claims the
+                 first free PCI slot (0x02) for it. -->
+            <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0' />
+        </interface>
+        <!-- Read-only signed sysext raws. The host libvirt (10) cannot express
+             a read-only virtiofs export, so the guest mounts it ro via fstab. -->
+        <filesystem type='mount' accessmode='passthrough'>
+            <driver type='virtiofs' />
+            <source dir='${EXPORT_DIR}' />
+            <target dir='sci-sysext-raws' />
+            <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0' />
+        </filesystem>
+        <memballoon model='virtio'>
+            <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0' />
+        </memballoon>
+        <console type='pty'>
+            <target type='serial' port='0' />
+        </console>
+        <serial type='file'>
+            <source path='/var/log/${HV_NAME}.log' />
+            <target port='0' />
+        </serial>
+    </devices>
+    <qemu:commandline>
+        <qemu:arg value='-blockdev' />
+        <qemu:arg value='driver=qcow2,node-name=sciroot,file.driver=file,file.filename=${DISK_PREFIX}/${HV_NAME}.qcow2' />
+        <qemu:arg value='-device' />
+        <qemu:arg value='nvme,serial=${HV_NAME},drive=sciroot,bootindex=1' />
+    </qemu:commandline>
+</domain>

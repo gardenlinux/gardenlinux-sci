@@ -1,0 +1,14 @@
+[Unit]
+Description=SCI storage activation (delivery-time multipath/iSCSI setup)
+After=systemd-sysext.service sci-20-compute-activation.service
+Wants=systemd-sysext.service sci-20-compute-activation.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/systemd-tmpfiles --create
+# Do not start multipathd.socket; an active multipathd.service refuses it.
+ExecStart=/usr/bin/systemctl start multipathd.service iscsid.socket
+
+[Install]
+WantedBy=multi-user.target

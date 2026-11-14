@@ -3,15 +3,35 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "Image tag to test (must be usi-sci)"
+        description: "Image tag to test (must be usi-sci); mutually exclusive with sysext_artifact"
         type: string
-        required: true
+        required: false
+      sysext_artifact:
+        description: "Raws actions artifact (signed extensions, manifest, SHA256SUMS, run cert); see artifact_run_id"
+        type: string
+        required: false
+      artifact_run_id:
+        description: "Run ID in this repository that produced sysext_artifact (default: this run)"
+        type: string
+        required: false
   workflow_call:
     inputs:
       image_tag:
-        description: "Image tag to test (must be usi-sci)"
+        description: "Image tag to test (must be usi-sci); mutually exclusive with sysext_artifact"
         type: string
-        required: true
+        required: false
+      sysext_artifact:
+        description: "Raws actions artifact (signed extensions, manifest, SHA256SUMS, run cert); see artifact_run_id"
+        type: string
+        required: false
+      artifact_run_id:
+        description: "Run ID in this repository that produced sysext_artifact (default: this run)"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
   test:
@@ -22,14 +42,50 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # An image tag and a raws artifact describe different guests; the shared
+      # setup boots whatever the matching build step left in /opt/hv.
+      - name: Validate exactly one test input
+        shell: bash
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          SYSEXT_ARTIFACT: ${{ inputs.sysext_artifact }}
+          ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
+        run: |
+          if [ -n "$IMAGE_TAG" ] && [ -n "$SYSEXT_ARTIFACT" ]; then
+            echo "Error: image_tag and sysext_artifact are mutually exclusive" >&2
+            exit 1
+          fi
+          if [ -z "$IMAGE_TAG" ] && [ -z "$SYSEXT_ARTIFACT" ]; then
+            echo "Error: exactly one of image_tag or sysext_artifact is required" >&2
+            exit 1
+          fi
+          if [ -n "$ARTIFACT_RUN_ID" ] && ! [[ "$ARTIFACT_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Error: artifact_run_id must be a positive integer" >&2
+            exit 1
+          fi
+
       - name: Install Dependencies
         uses: ./.github/actions/test/integration/dependencies
+
+      # The guest action generates the shared SSH identity. --prepare consumes
+      # its key, so it must run before either build step.
       - name: Prepare the test guest
         uses: ./.github/actions/test/integration/guest
+
       - name: Build
+        if: ${{ inputs.image_tag != '' }}
         uses: ./.github/actions/test/integration/build
         with:
           image_tag: ${{ inputs.image_tag }}
+
+      - name: Build sysext
+        if: ${{ inputs.sysext_artifact != '' }}
+        uses: ./.github/actions/test/integration/build-sysext
+        with:
+          sysext_artifact: ${{ inputs.sysext_artifact }}
+          artifact_run_id: ${{ inputs.artifact_run_id }}
+
       - name: Setup
         uses: ./.github/actions/test/integration/setup
       - name: Test QEMU

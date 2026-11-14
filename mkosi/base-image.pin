@@ -1,0 +1,11 @@
+# Published Garden Linux base image the extensions diff against; prepared by mkosi/base-image.sh.
+# Fields: FLAVOR, ARCH, VERSION (= Release=), COMMIT, TARBALL_SHA256, ROOTFS_TAR_SHA256, URL (derived).
+# Check: mkosi/base-image.sh validate_pin.
+# Update VERSION/COMMIT/hashes together with Release= and delivery/extensions.manifest.
+FLAVOR=openstack-gardener_prod
+ARCH=amd64
+VERSION=2150.9.0
+COMMIT=a6e35cf0c955dde584c67163a3a8dff6d60e9d56
+TARBALL_SHA256=3b5e705fa9d683048bd8657893f31d8a2f4a639ddda0249ca31b2e1c7b679bed
+ROOTFS_TAR_SHA256=3baa1c461d87bb3a25ee86a73aca6b0f060a2b2a918c84c9fe4ad4bd7bbd4cb8
+URL=https://github.com/gardenlinux/gardenlinux/releases/download/2150.9.0/openstack-gardener_prod-amd64-2150.9.0-a6e35cf0.tar.xz
