@@ -1,4 +1,7 @@
 .build
+mkosi/mkosi.tools
+mkosi/mkosi.tools.manifest
 .envrc
 .venv
 shell.nix
+__pycache__/
