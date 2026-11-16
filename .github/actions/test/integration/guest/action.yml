@@ -13,15 +13,24 @@ runs:
         PASSWORD=$(openssl passwd "password")
         echo "PASSWORD=$PASSWORD" >> $GITHUB_ENV
 
+    - name: Create the guest image directory
+      shell: bash
+      run: |
+        # The hypervisors mount this directory over virtiofs, so virtiofsd
+        # must be able to read every file in it as the qemu user.
+        install -d -m 0777 /opt/guest-images
+
     - name: Download ubuntu cloud image
       shell: bash
       run: |
-        wget -q "https://cloud-images.ubuntu.com/minimal/releases/noble/release/ubuntu-24.04-minimal-cloudimg-amd64.img" -O /opt/ubuntu.qcow2
+        wget -q "https://cloud-images.ubuntu.com/minimal/releases/noble/release/ubuntu-24.04-minimal-cloudimg-amd64.img" -O /opt/guest-images/ubuntu.qcow2
 
     - name: Generate raw ubuntu image for CHV
       shell: bash
       run: |
-        qemu-img convert -p -f qcow2 -O raw /opt/ubuntu.qcow2 /opt/ubuntu.raw
+        qemu-img convert -p -f qcow2 -O raw /opt/guest-images/ubuntu.qcow2 /opt/guest-images/ubuntu.raw
+        # The guest writes its root filesystem into this file through virtiofs.
+        chmod 0666 /opt/guest-images/ubuntu.raw
 
     - name: Generate ubuntu cloud-init
       shell: bash
@@ -35,4 +44,6 @@ runs:
         envsubst '${SSH_KEY} ${PASSWORD}' \
           < ./.github/actions/test/integration/guest/user-data \
           > "$RENDER_DIR/user-data"
-        genisoimage -output /opt/ubuntu-cloud-init-ds.iso -volid cidata -joliet -rock ./.github/actions/test/integration/guest/meta-data "$RENDER_DIR/user-data"
+        genisoimage -output /opt/guest-images/ubuntu-cloud-init-ds.iso -volid cidata -joliet -rock ./.github/actions/test/integration/guest/meta-data "$RENDER_DIR/user-data"
+        # Read-only for the guest; the qemu user only needs to open it.
+        chmod 0644 /opt/guest-images/ubuntu-cloud-init-ds.iso

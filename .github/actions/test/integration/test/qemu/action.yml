@@ -10,14 +10,14 @@ runs:
         # that the ssh config names.
         [ -s /opt/ssh_host_ed25519_key ] || { echo "the shared SSH key /opt/ssh_host_ed25519_key is missing" >&2; exit 1; }
         IP_HV1="192.168.122.2"
-        IP_HV2="192.168.122.3"
 
         scp ./.github/actions/test/integration/test/qemu/vm.xml "$IP_HV1:/opt/vm-qemu.xml"
-        scp /opt/ubuntu.qcow2 "$IP_HV1:/var/lib/libvirt/images/ubuntu.qcow2"
-        scp /opt/ubuntu-cloud-init-ds.iso "$IP_HV1:/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso"
 
-        # the cloud-init data is not migrated from source to destination, but needed for the VM to run at the destination
-        scp /opt/ubuntu-cloud-init-ds.iso "$IP_HV2:/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso"
+        # The cloud-init data stays on the virtiofs share, which both
+        # hypervisors mount, so it is not copied anywhere.
+        # The root disk is copied out of the share once, because
+        # --copy-storage-all moves the local volume to the destination.
+        ssh "$IP_HV1" 'cp /opt/guest-images/ubuntu.qcow2 /var/lib/libvirt/images/ubuntu.qcow2'
 
     - name: Start VM on HyperVisor 1
       shell: bash

@@ -19,7 +19,7 @@
         </disk>
         <disk type='file' device='disk'>
             <driver name='qemu' type='raw' />
-            <source file='/var/lib/libvirt/images/ubuntu-cloud-init-ds.iso' />
+            <source file='/opt/guest-images/ubuntu-cloud-init-ds.iso' />
             <target dev='vdb' bus='virtio' />
             <readonly />
         </disk>
