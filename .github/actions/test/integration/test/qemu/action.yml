@@ -10,14 +10,12 @@ runs:
         # that the ssh config names.
         [ -s /opt/ssh_host_ed25519_key ] || { echo "the shared SSH key /opt/ssh_host_ed25519_key is missing" >&2; exit 1; }
         IP_HV1="192.168.122.2"
-        IP_HV2="192.168.122.3"
 
         scp ./.github/actions/test/integration/test/qemu/vm.xml "$IP_HV1:/opt/vm-qemu.xml"
-        scp /opt/cirros.qcow2 "$IP_HV1:/var/lib/libvirt/images/cirros.qcow2"
-        scp /opt/cirros-cloud-init-ds.iso "$IP_HV1:/var/lib/libvirt/images/cirros-cloud-init-ds.iso"
 
-        # the cloud-init data is not migrated from source to destination, but needed for the VM to run at the destination
-        scp /opt/cirros-cloud-init-ds.iso "$IP_HV2:/var/lib/libvirt/images/cirros-cloud-init-ds.iso"
+        # Keep the QEMU root disk local for --copy-storage-all. Setup already
+        # links the shared seed at its existing /var/lib/libvirt/images path.
+        scp /opt/cirros.qcow2 "$IP_HV1:/var/lib/libvirt/images/cirros.qcow2"
 
     - name: Start VM on HyperVisor 1
       shell: bash

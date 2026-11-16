@@ -10,16 +10,10 @@ runs:
         # that the ssh config names.
         [ -s /opt/ssh_host_ed25519_key ] || { echo "the shared SSH key /opt/ssh_host_ed25519_key is missing" >&2; exit 1; }
         IP_HV1="192.168.122.2"
-        IP_HV2="192.168.122.3"
 
+        # Setup links the shared raw disk and seed at the existing
+        # /var/lib/libvirt/images paths, so only the domain definition travels.
         scp ./.github/actions/test/integration/test/cloudhypervisor/vm.xml "$IP_HV1:/opt/vm-chv.xml"
-        scp /opt/cirros.raw "$IP_HV1:/var/lib/libvirt/images/cirros.raw"
-        scp /opt/cirros-cloud-init-ds.iso "$IP_HV1:/var/lib/libvirt/images/cirros-cloud-init-ds.iso"
-
-        # libvirt migration between cloudhypervisor instances does not support storage migration yet
-        scp /opt/cirros.raw "$IP_HV2:/var/lib/libvirt/images/cirros.raw"
-        # the cloud-init data is not migrated from source to destination, but needed for the VM to run at the destination
-        scp /opt/cirros-cloud-init-ds.iso "$IP_HV2:/var/lib/libvirt/images/cirros-cloud-init-ds.iso"
 
     - name: Start VM on HyperVisor 1
       shell: bash

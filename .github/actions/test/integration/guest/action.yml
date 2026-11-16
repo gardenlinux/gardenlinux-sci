@@ -38,3 +38,14 @@ runs:
           < ./.github/actions/test/integration/guest/user-data \
           > "$RENDER_DIR/user-data"
         genisoimage -output /opt/cirros-cloud-init-ds.iso -volid cidata -joliet -rock ./.github/actions/test/integration/guest/meta-data "$RENDER_DIR/user-data"
+
+    - name: Export the shared guest files
+      shell: bash
+      run: |
+        # Keep the existing /opt outputs. Hard links expose only the raw disk
+        # and seed to virtiofs, without copying them or exporting the SSH key.
+        install -d -m 0755 /opt/guest-images
+        chmod 0666 /opt/cirros.raw
+        chmod 0644 /opt/cirros-cloud-init-ds.iso
+        ln /opt/cirros.raw /opt/guest-images/cirros.raw
+        ln /opt/cirros-cloud-init-ds.iso /opt/guest-images/cirros-cloud-init-ds.iso
