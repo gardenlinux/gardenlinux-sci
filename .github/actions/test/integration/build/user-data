@@ -3,8 +3,8 @@ users:
   - name: root
     shell: /bin/bash
     ssh_authorized_keys:
-      - "SSH_KEY_GOES_HERE"
-    hashed_passwd: "PASSWORD_GOES_HERE"
+      - "${SSH_KEY}"
+    hashed_passwd: "${PASSWORD}"
 
 disable_root: false
 
