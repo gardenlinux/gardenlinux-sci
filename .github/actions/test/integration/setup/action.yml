@@ -84,6 +84,10 @@ runs:
         chmod 700 /root/.ssh
         chmod 600 /root/.ssh/config /opt/ssh_host_ed25519_key
         mkdir -p /var/log/libvirt/ch
+        # The runner serves the guest images over virtiofs, so both hypervisors
+        # use the same files and no image is copied between them.
+        mkdir -p /opt/guest-images
+        mountpoint -q /opt/guest-images || mount -t virtiofs guest-images /opt/guest-images
         systemctl start libvirtd
         virsh pool-destroy default || true
         virsh pool-undefine default || true

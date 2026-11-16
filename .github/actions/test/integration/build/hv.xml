@@ -1,6 +1,11 @@
 <domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
     <name>${HV_NAME}</name>
     <memory unit='GiB'>6</memory>
+    <memoryBacking>
+        <!-- virtiofs needs a shared memory backend. -->
+        <source type='memfd' />
+        <access mode='shared' />
+    </memoryBacking>
     <vcpu>2</vcpu>
     <os firmware='efi'>
         <type arch='x86_64'>hvm</type>
@@ -17,6 +22,13 @@
             <source file='/var/lib/libvirt/images/${HV_NAME}.qcow2' />
             <target dev='vda' bus='virtio' />
         </disk>
+        <!-- The guest images are served once from the runner instead of being
+             copied to each hypervisor. -->
+        <filesystem type='mount' accessmode='passthrough'>
+            <driver type='virtiofs' />
+            <source dir='/opt/guest-images' />
+            <target dir='guest-images' />
+        </filesystem>
         <interface type='network'>
             <mac address='${MAC}' />
             <source network='${NETWORK}' />
