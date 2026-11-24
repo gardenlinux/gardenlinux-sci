@@ -11,6 +11,22 @@
     "/^rel-\\d+-dev$/"
   ],
   "useBaseBranchConfig": "merge",
+  "github-actions": {
+    "managerFilePatterns": [
+      "/(^|/)\\.github/actions/test/integration/(?:.*/)?action\\.ya?ml$/"
+    ],
+    "ignorePaths": [
+      "**/node_modules/**",
+      "**/bower_components/**",
+      "**/vendor/**",
+      "**/examples/**",
+      "**/__tests__/**",
+      "**/tests/**",
+      "**/__fixtures__/**",
+      "**/.mise/locks/**",
+      "**/.config/mise/locks/**"
+    ]
+  },
   "packageRules": [
     {
       "matchPackageNames": [
