@@ -21,12 +21,14 @@ on:
         type: boolean
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   track_upstream_release_line:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
@@ -43,6 +45,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch' || inputs.release_line == 'all' || inputs.release_line == matrix.release_line
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: true # The release script pushes its automation branch.
           fetch-depth: 0
           submodules: recursive
 
@@ -85,12 +88,18 @@ jobs:
 
       - name: Show decision
         if: github.event_name != 'workflow_dispatch' || inputs.release_line == 'all' || inputs.release_line == matrix.release_line
+        env:
+          RELEASE_LINE: ${{ matrix.release_line }}
+          TARGET_BRANCH: ${{ matrix.branch }}
+          UPSTREAM_TAG: ${{ steps.detect.outputs.upstream_tag }}
+          REPO_TAG: ${{ steps.detect.outputs.repo_tag }}
+          TAG_EXISTS: ${{ steps.detect.outputs.tag_exists }}
         run: |
-          echo "release_line=${{ matrix.release_line }}"
-          echo "branch=${{ matrix.branch }}"
-          echo "upstream_tag=${{ steps.detect.outputs.upstream_tag }}"
-          echo "repo_tag=${{ steps.detect.outputs.repo_tag }}"
-          echo "tag_exists=${{ steps.detect.outputs.tag_exists }}"
+          echo "release_line=$RELEASE_LINE"
+          echo "branch=$TARGET_BRANCH"
+          echo "upstream_tag=$UPSTREAM_TAG"
+          echo "repo_tag=$REPO_TAG"
+          echo "tag_exists=$TAG_EXISTS"
 
       - name: Execute repository script
         if: (github.event_name != 'workflow_dispatch' || inputs.release_line == 'all' || inputs.release_line == matrix.release_line) && ((github.event_name == 'workflow_dispatch' && inputs.force_run) || steps.detect.outputs.tag_exists != 'true')

@@ -1,0 +1,7 @@
+rules:
+  self-repository:
+    # Keep ./ local references compatible with the existing CI tooling.
+    ignore:
+      - dev.yml
+      - nightly.yaml
+      - test.yml

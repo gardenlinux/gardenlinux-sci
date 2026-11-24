@@ -5,7 +5,7 @@ runs:
   steps:
     - name: Generate the test SSH key
       shell: bash
-      run: |
+      run: | # zizmor: ignore[github-env] Generated key and password hash are single-line values.
         ssh-keygen -t ed25519 -f "/opt/ssh_host_ed25519_key" -N "" -C "user" -q
         chmod 600 /opt/ssh_host_ed25519_key
         SSH_KEY=$(cat /opt/ssh_host_ed25519_key.pub)
