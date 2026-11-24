@@ -13,6 +13,9 @@ on:
         type: string
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-24.04
@@ -22,6 +25,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Install Dependencies
         uses: ./.github/actions/test/integration/dependencies
       - name: Prepare the test guest

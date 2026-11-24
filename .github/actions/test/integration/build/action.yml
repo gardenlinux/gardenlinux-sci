@@ -28,7 +28,11 @@ runs:
         TAG: ${{ inputs.image_tag }}
         ESP_SIZE: 2  # GiB
         DISK_SIZE: 8  # GiB
-      run: |
+      run: | # zizmor: ignore[github-env] TAG is validated; remaining values are constants.
+        if ! [[ "$TAG" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]]; then
+          echo "Error: image_tag must be a valid OCI tag" >&2
+          exit 1
+        fi
         echo "REPO=$REPO" >> $GITHUB_ENV
         echo "TAG=$TAG" >> $GITHUB_ENV
         echo "ESP_SIZE=$ESP_SIZE" >> $GITHUB_ENV
@@ -37,11 +41,6 @@ runs:
     - name: Validate image tag
       shell: bash
       run: |
-        if [ -z "$TAG" ]; then
-          echo "Error: image_tag is required"
-          exit 1
-        fi
-
         echo "Verifying image $TAG exists in GHCR..."
         if ! digest=$(oras resolve "$REPO:$TAG" 2>&1); then
           echo "Error: Image tag '$TAG' not found in $REPO"
@@ -67,7 +66,7 @@ runs:
 
     - name: Set up a raw disk image
       shell: bash
-      run: |
+      run: | # zizmor: ignore[github-env] Paths derive from validated TAG, runner metadata, and losetup.
         ESP_END="${ESP_SIZE}GiB"
         DISK_IMG="${RUNNER_TEMP}/${TAG}.img"
         echo "DISK_IMG=$DISK_IMG" >> $GITHUB_ENV

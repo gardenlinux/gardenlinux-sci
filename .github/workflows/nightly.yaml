@@ -9,6 +9,10 @@ on:
         description: "Version to build"
         type: string
         default: now
+
+permissions:
+  contents: read
+
 jobs:
   checkout:
     runs-on: ubuntu-24.04
@@ -16,9 +20,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           submodules: recursive
   build:
     needs: [checkout]
+    # Required by the pinned upstream workflow, including for target: dev.
+    permissions:
+      contents: read
+      actions: write
+      id-token: write
     uses: gardenlinux/gardenlinux/.github/workflows/build.yml@ed75af27781084f5e6742bab59b89861150098d8
     with:
       version: ${{ inputs.version || 'now' }}
@@ -40,14 +50,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Compute image tag
         id: meta
+        env:
+          BUILD_VERSION: ${{ needs.build.outputs.version }}
         run: |
-          IMAGE_TAG=$(.github/scripts/compute-image-tag.sh "${{ needs.build.outputs.version }}")
-          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          IMAGE_TAG=$(.github/scripts/compute-image-tag.sh "$BUILD_VERSION")
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
   upload_oci:
     name: Run glcli to publish to OCI
     needs: [build]
+    permissions:
+      contents: read
+      packages: write
     # use custom upload_oci.yml as we do not sign the images
     # uses: gardenlinux/gardenlinux/.github/workflows/upload_oci.yml@ed75af27781084f5e6742bab59b89861150098d8
     uses: ./.github/workflows/upload_oci.yml
