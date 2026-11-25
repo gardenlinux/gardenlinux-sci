@@ -91,6 +91,12 @@ runs:
         chmod 700 /root/.ssh
         chmod 600 /root/.ssh/config /opt/ssh_host_ed25519_key
         mkdir -p /var/log/libvirt/ch
+        # Preserve the domain disk paths without mounting over the local
+        # QEMU storage pool: only the CH raw disk and seed are shared.
+        mkdir -p /var/lib/libvirt/images/shared
+        mountpoint -q /var/lib/libvirt/images/shared || mount -t virtiofs guest-images /var/lib/libvirt/images/shared
+        ln -s shared/cirros.raw /var/lib/libvirt/images/cirros.raw
+        ln -s shared/cirros-cloud-init-ds.iso /var/lib/libvirt/images/cirros-cloud-init-ds.iso
         systemctl start libvirtd
         virsh pool-destroy default || true
         virsh pool-undefine default || true
