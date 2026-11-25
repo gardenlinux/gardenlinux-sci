@@ -61,9 +61,6 @@ runs:
         add_host 52:54:00:12:34:56 192.168.122.2 hv1
         add_host 52:54:00:65:43:21 192.168.122.3 hv2
 
-        # The runner home ships as 750; qemu must traverse it to reach the disks.
-        sudo chmod o+x "$HOME"
-
         for spec in "HV1 192.168.122.2" "HV2 192.168.122.3"; do
           set -- $spec
           name=$1
