@@ -13,26 +13,33 @@ on:
         type: string
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Install oras
         uses: oras-project/setup-oras@ac735097e22fe643015b0d19645f7c9a69942128 # v2
         with:
           version: 1.2.2
       - name: Validate image tag
+        env:
+          TAG: ${{ inputs.image_tag }}
         run: |
-          if [ -z "${{ inputs.image_tag }}" ]; then
-            echo "Error: image_tag is required"
+          if ! [[ "$TAG" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]]; then
+            echo "Error: image_tag must be a valid OCI tag"
             exit 1
           fi
 
-          echo "Verifying image ${{ inputs.image_tag }} exists in GHCR..."
-          if ! digest=$(oras resolve ghcr.io/gardenlinux/gardenlinux-sci:${{ inputs.image_tag }} 2>&1); then
-            echo "Error: Image tag '${{ inputs.image_tag }}' not found in ghcr.io/gardenlinux/gardenlinux-sci"
+          echo "Verifying image $TAG exists in GHCR..."
+          if ! digest=$(oras resolve "ghcr.io/gardenlinux/gardenlinux-sci:$TAG" 2>&1); then
+            echo "Error: Image tag '$TAG' not found in ghcr.io/gardenlinux/gardenlinux-sci"
             echo "Resolve output: $digest"
             exit 1
           fi

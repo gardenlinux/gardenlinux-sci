@@ -1,0 +1,28 @@
+name: workflow-lint
+
+on:
+  pull_request:
+    paths: [".github/**"]
+  push:
+    branches: [main, "rel-*"]
+    paths: [".github/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check workflow syntax and shell scripts
+        run: |
+          shellcheck --version
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+      - name: Check workflow security
+        run: pipx run --spec zizmor==1.33.1 zizmor --offline --strict-collection --collect=all --format=github .github
