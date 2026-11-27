@@ -1,0 +1,33 @@
+#!/bin/bash
+# Fetch the pinned Garden Linux archives used by BaseTrees= and the guest disks.
+# mkosi runs this with the config directory at $SRCDIR, and the build-source
+# bind mounts that directory read-write, so the cache lives at $SRCDIR/base-image.
+# Outside mkosi, pass SRCDIR=<repo>/mkosi to use the same location.
+set -euo pipefail
+
+pin="${SRCDIR:?SRCDIR is not set}/base-image.pin"
+cache="$SRCDIR/base-image"
+rootfs="$cache/rootfs.tar"
+disk="$cache/base.qcow2"
+
+if [ -s "$rootfs" ] && [ -s "$disk" ]; then
+    exit 0
+fi
+
+read -r expected url < <(grep -Ev '^[[:space:]]*(#|$)' "$pin")
+name=$(basename "$url" .tar.xz)
+tarball="$cache/$name.tar.xz"
+
+mkdir -p "$cache"
+if [ ! -s "$tarball" ]; then
+    curl -fL --retry 3 --retry-delay 5 -o "$tarball.part" "$url"
+    mv "$tarball.part" "$tarball"
+fi
+echo "$expected  $tarball" | sha256sum --check --status ||
+    { echo "$tarball does not match $pin" >&2; exit 1; }
+
+work=$(mktemp -d "$cache/.extract.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+tar -xf "$tarball" -C "$work" -- "$name.tar" "$name.qcow2"
+mv "$work/$name.tar" "$rootfs"
+mv "$work/$name.qcow2" "$disk"
