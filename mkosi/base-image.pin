@@ -1,0 +1,4 @@
+# Published Garden Linux base image the extensions diff against; fetched by
+# mkosi/mkosi.sync.
+# Format: <sha256> <url>
+3b5e705fa9d683048bd8657893f31d8a2f4a639ddda0249ca31b2e1c7b679bed https://github.com/gardenlinux/gardenlinux/releases/download/2150.9.0/openstack-gardener_prod-amd64-2150.9.0-a6e35cf0.tar.xz

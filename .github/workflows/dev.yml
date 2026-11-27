@@ -65,6 +65,43 @@ jobs:
       # aws_oidc_session: ${{ secrets.AWS_OIDC_SESSION }}
       # secureboot_db_kms_arn: ${{ secrets.SECUREBOOT_DB_KMS_ARN }}
 
+  build_sysext:
+    name: Build sysext images
+    if: ${{ github.event_name != 'pull_request' || github.event.action != 'closed' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          # The cache scan follows the absolute symlinks in the feature tree and
+          # fails on the ones the runner cannot read.
+          enable-cache: false
+
+      # mkosi builds through unprivileged user namespaces, which the runner's
+      # AppArmor profile blocks by default.
+      - name: Build sysext images
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          MKOSI="mkosi @ git+https://github.com/systemd/mkosi.git@v27.1"
+          test -s mkosi/mkosi.key || uv tool run --from "$MKOSI" mkosi --directory mkosi genkey
+          uv tool run --from "$MKOSI" mkosi --directory mkosi build
+
+      - name: Upload sysext artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sysext-raws
+          path: |
+            .build/mkosi/output/*.raw
+            mkosi/mkosi.crt
+          retention-days: 7
+          if-no-files-found: error
+
   meta:
     name: Compute image metadata
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.action != 'closed' }}
@@ -106,6 +143,14 @@ jobs:
     uses: ./.github/workflows/test.yml
     with:
       image_tag: ${{ needs.meta.outputs.image_tag }}
+
+  test_sysext:
+    name: Test PR sysext
+    needs: [build_sysext]
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.action != 'closed' }}
+    uses: ./.github/workflows/test.yml
+    with:
+      sysext_artifact: sysext-raws
 
   cleanup_images:
     name: Cleanup PR images

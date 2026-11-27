@@ -1,4 +1,10 @@
 .build
+mkosi/base-image
+mkosi/mkosi.key
+mkosi/mkosi.crt
+mkosi/mkosi.tools
+mkosi/mkosi.tools.manifest
 .envrc
 .venv
 shell.nix
+__pycache__/
