@@ -143,6 +143,14 @@ jobs:
     with:
       image_tag: ${{ needs.meta.outputs.image_tag }}
 
+  test_sysext:
+    name: Test PR sysext
+    needs: [build_sysext]
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.action != 'closed' }}
+    uses: ./.github/workflows/test.yml
+    with:
+      sysext_artifact: sysext-raws
+
   cleanup_images:
     name: Cleanup PR images
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.action == 'closed' }}
