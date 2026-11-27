@@ -9,6 +9,10 @@ on:
         description: "Version to build"
         type: string
         default: now
+# Keep ordinary jobs read-only; grant elevated scopes only at call sites.
+permissions:
+  contents: read
+
 jobs:
   checkout:
     runs-on: ubuntu-24.04
@@ -19,6 +23,12 @@ jobs:
           submodules: recursive
   build:
     needs: [checkout]
+    # Required by the pinned upstream reusable workflow, even for target: dev.
+    permissions:
+      contents: read
+      actions: write
+      id-token: write
+      packages: write
     uses: gardenlinux/gardenlinux/.github/workflows/build.yml@2c13d3c6f94c8ad315b2817493464c87b525a946
     with:
       version: ${{ inputs.version || 'now' }}
@@ -51,6 +61,9 @@ jobs:
     needs: [build]
     # use custom upload_oci.yml as we do not sign the images
     # uses: gardenlinux/gardenlinux/.github/workflows/upload_oci.yml@2c13d3c6f94c8ad315b2817493464c87b525a946
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/upload_oci.yml
     with:
       version: ${{ needs.build.outputs.version }}

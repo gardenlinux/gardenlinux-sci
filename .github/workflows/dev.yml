@@ -13,6 +13,10 @@ on:
       - "**/README.md"
       - "docs/**"
 
+# Keep ordinary jobs read-only; grant elevated scopes only where required.
+permissions:
+  contents: read
+
 # Cancel any in-progress PR workflow runs when PR is closed
 # Used to ensure cleanup runs after any PR build are uploaded (or aborts before the upload)
 concurrency:
@@ -38,7 +42,14 @@ jobs:
 
   build:
     needs: [set_version]
-    if: ${{ github.event_name != 'pull_request' || github.event.action != 'closed' }}
+    # Do not run the privileged upstream build against fork PR code.
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository) }}
+    # Required by the pinned upstream reusable workflow, even for target: dev.
+    permissions:
+      contents: read
+      actions: write
+      id-token: write
+      packages: write
     uses: gardenlinux/gardenlinux/.github/workflows/build.yml@2c13d3c6f94c8ad315b2817493464c87b525a946
     with:
       version: ${{ needs.set_version.outputs.VERSION }}
@@ -75,12 +86,14 @@ jobs:
     name: Upload PR image to OCI
     needs: [build, meta, set_version]
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.action != 'closed' }}
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/upload_oci.yml
     with:
       version: ${{ needs.set_version.outputs.VERSION }}
       upload_version: ${{ needs.meta.outputs.UPLOAD_VERSION }}
       flavor_filter: '--include-only "metal-sci_usi-amd64"'
-    secrets: inherit
 
   test:
     name: Test PR image
@@ -92,6 +105,8 @@ jobs:
 
   cleanup_images:
     name: Cleanup PR images
+    permissions:
+      packages: write
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.action == 'closed' }}
     runs-on: ubuntu-24.04
     steps:
@@ -106,7 +121,7 @@ jobs:
 
           # Collect all matching version IDs across pages
           while true; do
-            response=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            response=$(curl --fail-with-body --silent --show-error -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               "https://api.github.com/orgs/gardenlinux/packages/container/gardenlinux-sci/versions?per_page=$page_size&page=$page")
@@ -141,5 +156,6 @@ jobs:
               "https://api.github.com/orgs/gardenlinux/packages/container/gardenlinux-sci/versions/$version_id")
             if [ "$http_code" != "204" ]; then
               echo "Failed to delete version $version_id (HTTP $http_code)"
+              exit 1
             fi
           done

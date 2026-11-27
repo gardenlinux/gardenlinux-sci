@@ -27,7 +27,7 @@ jobs:
     env:
       CNAME: ''
     permissions:
-      id-token: write
+      contents: read
       packages: write
     strategy:
       fail-fast: false
@@ -37,14 +37,11 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # pin@v4.1.1
         with:
           submodules: true
+          persist-credentials: false
       - uses: oras-project/setup-oras@ac735097e22fe643015b0d19645f7c9a69942128 # v2
       - run: oras version
       - name: Install python-gardenlinux-lib
         uses: gardenlinux/python-gardenlinux-lib/.github/actions/setup@7b3c8e74746b20863c760f259bf1208982f51d97
-      - name: Install cosign
-        uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
-        with:
-          cosign-release: 'v3.1.6'
       - name: Set flavor version reference
         run: |
           git rev-parse HEAD | cut -c1-8 | tee COMMIT
@@ -106,9 +103,8 @@ jobs:
     env:
       CNAME: ''
     permissions:
-      id-token: write
+      contents: read
       packages: write
-      actions: write
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix_publish.outputs.matrix) }}
@@ -117,6 +113,7 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # pin@v4.1.1
         with:
           submodules: true
+          persist-credentials: false
       - name: Install python-gardenlinux-lib
         uses: gardenlinux/python-gardenlinux-lib/.github/actions/setup@19c1b24c01faab81a7fe24713748dd172d00904a
       - name: Set flavor version reference
