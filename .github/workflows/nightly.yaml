@@ -20,6 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           submodules: recursive
   build:
     needs: [checkout]
@@ -51,11 +52,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Compute image tag
         id: meta
+        env:
+          BUILD_VERSION: ${{ needs.build.outputs.version }}
         run: |
-          IMAGE_TAG=$(.github/scripts/compute-image-tag.sh "${{ needs.build.outputs.version }}")
-          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          IMAGE_TAG=$(.github/scripts/compute-image-tag.sh "$BUILD_VERSION")
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
   upload_oci:
     name: Run glcli to publish to OCI
     needs: [build]

@@ -33,12 +33,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           submodules: recursive
 
       - name: use VERSION file to support dev build on rel-branch
         id: version
         run: |
-          echo "VERSION=$(cat VERSION)" >> $GITHUB_OUTPUT
+          echo "VERSION=$(cat VERSION)" >> "$GITHUB_OUTPUT"
 
   build:
     needs: [set_version]
@@ -73,14 +74,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Compute image metadata
         id: meta
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
           UPLOAD_VERSION="pr-${PR_NUMBER}"
-          echo "upload_version=${UPLOAD_VERSION}" >> $GITHUB_OUTPUT
+          echo "upload_version=${UPLOAD_VERSION}" >> "$GITHUB_OUTPUT"
           IMAGE_TAG=$(.github/scripts/compute-image-tag.sh "${UPLOAD_VERSION}")
-          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
 
   upload:
     name: Upload PR image to OCI
@@ -111,6 +114,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Cleanup OCI images via GitHub API
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
           UPLOAD_VERSION="pr-${PR_NUMBER}"
@@ -121,7 +126,7 @@ jobs:
 
           # Collect all matching version IDs across pages
           while true; do
-            response=$(curl --fail-with-body --silent --show-error -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            response=$(curl --fail-with-body --silent --show-error -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               "https://api.github.com/orgs/gardenlinux/packages/container/gardenlinux-sci/versions?per_page=$page_size&page=$page")
@@ -150,7 +155,7 @@ jobs:
           for version_id in $all_version_ids; do
             echo "Deleting version $version_id"
             http_code=$(curl -s -w "%{http_code}" -o /dev/null -X DELETE \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               "https://api.github.com/orgs/gardenlinux/packages/container/gardenlinux-sci/versions/$version_id")

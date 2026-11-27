@@ -15,11 +15,15 @@ runs:
         TAG: ${{ inputs.image_tag }}
         ESP_SIZE: 2  # GiB
         DISK_SIZE: 8  # GiB
-      run: |
-        echo "REPO=$REPO" >> $GITHUB_ENV
-        echo "TAG=$TAG" >> $GITHUB_ENV
-        echo "ESP_SIZE=$ESP_SIZE" >> $GITHUB_ENV
-        echo "DISK_SIZE=$DISK_SIZE" >> $GITHUB_ENV
+      run: | # zizmor: ignore[github-env] TAG is validated; remaining values are constants.
+        if ! [[ "$TAG" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]]; then
+          echo "Error: image_tag must be a valid OCI tag" >&2
+          exit 1
+        fi
+        echo "REPO=$REPO" >> "$GITHUB_ENV"
+        echo "TAG=$TAG" >> "$GITHUB_ENV"
+        echo "ESP_SIZE=$ESP_SIZE" >> "$GITHUB_ENV"
+        echo "DISK_SIZE=$DISK_SIZE" >> "$GITHUB_ENV"
 
     - name: Pull ORAS artifacts
       shell: bash
@@ -38,10 +42,10 @@ runs:
 
     - name: Set up a raw disk image
       shell: bash
-      run: |
+      run: | # zizmor: ignore[github-env] Paths derive from validated TAG, runner metadata, and losetup.
         ESP_END="${ESP_SIZE}GiB"
         DISK_IMG="${RUNNER_TEMP}/${TAG}.img"
-        echo "DISK_IMG=$DISK_IMG" >> $GITHUB_ENV
+        echo "DISK_IMG=$DISK_IMG" >> "$GITHUB_ENV"
 
         qemu-img create "$DISK_IMG" "${DISK_SIZE}G"
         parted "$DISK_IMG" --script mklabel gpt
@@ -53,9 +57,9 @@ runs:
         parted "$DISK_IMG" --script name 2 VAR
 
         LOOPDEV=$(sudo losetup --show -fP "$DISK_IMG")
-        echo "LOOPDEV=$LOOPDEV" >> $GITHUB_ENV
+        echo "LOOPDEV=$LOOPDEV" >> "$GITHUB_ENV"
         ESP_PART="${LOOPDEV}p1"
-        echo "ESP_PART=$ESP_PART" >> $GITHUB_ENV
+        echo "ESP_PART=$ESP_PART" >> "$GITHUB_ENV"
         VAR_PART="${LOOPDEV}p2"
 
         sudo mkfs.vfat -F32 "$ESP_PART"
@@ -94,11 +98,11 @@ runs:
 
     - name: Generate ignition
       shell: bash
-      run: |
+      run: | # zizmor: ignore[github-env] Generated key and password hash are single-line values.
         ssh-keygen -t ed25519 -f "/opt/ssh_host_ed25519_key" -N "" -C "user" -q
         chmod 600 /opt/ssh_host_ed25519_key
         SSH_KEY=$(cat /opt/ssh_host_ed25519_key.pub)
-        echo "SSH_KEY=$SSH_KEY" >> $GITHUB_ENV
+        echo "SSH_KEY=$SSH_KEY" >> "$GITHUB_ENV"
         cp ./.github/actions/test/integration/build/dev-user-butane.yaml ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
         yq '.storage.files += load("./.github/actions/test/integration/build/root-hints.yaml")' ./.github/actions/test/integration/build/dev-user-butane.yaml > ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
 
@@ -106,11 +110,11 @@ runs:
         sed -i "s|SSH_KEY_GOES_HERE|$SSH_KEY|g" ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
 
         PASSWORD=$(openssl passwd "password")
-        echo "PASSWORD=$PASSWORD" >> $GITHUB_ENV
+        echo "PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
         sed -i "s|PASSWORD_GOES_HERE|$PASSWORD|g" ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
         sed -i "s|PASSWORD_GOES_HERE|$PASSWORD|g" ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
-        sed -i "s|TAG_GOES_HERE|${{ inputs.image_tag }}|g" ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
-        sed -i "s|TAG_GOES_HERE|${{ inputs.image_tag }}|g" ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
+        sed -i "s|TAG_GOES_HERE|${TAG}|g" ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml
+        sed -i "s|TAG_GOES_HERE|${TAG}|g" ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml
 
         butane --pretty --strict ./.github/actions/test/integration/build/dev-user-butane-hv1.yaml > "/opt/${TAG}-hv1.ign"
         butane --pretty --strict ./.github/actions/test/integration/build/dev-user-butane-hv2.yaml > "/opt/${TAG}-hv2.ign"
